@@ -38,14 +38,14 @@ This repository (the template) stays clean with placeholder values. Your real co
 
 Install the following before running the wizard:
 
-| Tool | Purpose | Install |
-|---|---|---|
-| [Claude Code](https://claude.ai/code) | Runs the install/uninstall wizards | [docs](https://docs.anthropic.com/en/docs/claude-code/overview) |
-| [gcloud CLI](https://cloud.google.com/sdk/docs/install) | Manages GCP resources | `brew install google-cloud-sdk` |
-| [Terraform](https://developer.hashicorp.com/terraform/install) ≥ 1.9 | Provisions infrastructure | `brew install terraform` |
-| [git](https://git-scm.com/) | Version control | pre-installed on most systems |
-| [Node.js](https://nodejs.org/) ≥ 20 | Generates frontend lock file | `brew install node` |
-| [gh CLI](https://cli.github.com/) | Creates the deployment repository (optional) | `brew install gh` |
+| Tool | Purpose | macOS | Linux |
+|---|---|---|---|
+| [Claude Code](https://claude.ai/code) | Runs the install/uninstall wizards | [docs](https://docs.anthropic.com/en/docs/claude-code/overview) | [docs](https://docs.anthropic.com/en/docs/claude-code/overview) |
+| [gcloud CLI](https://cloud.google.com/sdk/docs/install) | Manages GCP resources | `brew install google-cloud-sdk` | [install guide](https://cloud.google.com/sdk/docs/install#linux) |
+| [Terraform](https://developer.hashicorp.com/terraform/install) ≥ 1.9 | Provisions infrastructure | `brew install terraform` | [install guide](https://developer.hashicorp.com/terraform/install#linux) |
+| [git](https://git-scm.com/) | Version control | pre-installed | `sudo apt install git` |
+| [Node.js](https://nodejs.org/) ≥ 20 | Generates frontend lock file | `brew install node` | `nvm install 20` ([nvm](https://github.com/nvm-sh/nvm)) |
+| [gh CLI](https://cli.github.com/) (optional) | Creates the deployment repository | `brew install gh` | [install guide](https://github.com/cli/cli/blob/trunk/docs/install_linux.md) |
 
 Authenticate gcloud before running the wizard:
 

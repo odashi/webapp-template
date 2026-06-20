@@ -465,11 +465,15 @@ git push app init-config:main
 
 After apply, tell the user:
 
-> dev ドメインの DNS レコードを設定してください:
+> dev ドメインの DNS レコードを設定してください。Cloud Run のカスタムドメインはすべて `ghs.googlehosted.com.` への CNAME レコードです:
 >
-> 1. `https://console.cloud.google.com/run/domains?project=DEV_PROJECT_ID` を開く
-> 2. **DEV_FRONTEND_DOMAIN** と **DEV_BACKEND_DOMAIN** の DNS レコードを確認
-> 3. DNS プロバイダに登録 (反映には最大 1 時間かかる場合があります)
+> | ドメイン | タイプ | 値 |
+> |---|---|---|
+> | **DEV_FRONTEND_DOMAIN** | CNAME | `ghs.googlehosted.com.` |
+> | **DEV_BACKEND_DOMAIN** | CNAME | `ghs.googlehosted.com.` |
+>
+> DNS プロバイダにこれらの CNAME レコードを登録してください。反映には最大 1 時間かかる場合があります。
+> なお、Cloud Console (`https://console.cloud.google.com/run/domains?project=DEV_PROJECT_ID`) では SSL 証明書の発行状況を確認できます。
 
 ---
 
@@ -547,11 +551,15 @@ git push app init-config:release
 
 After apply, tell the user:
 
-> prod ドメインの DNS レコードを設定してください:
+> prod ドメインの DNS レコードを設定してください。Cloud Run のカスタムドメインはすべて `ghs.googlehosted.com.` への CNAME レコードです:
 >
-> 1. `https://console.cloud.google.com/run/domains?project=PROD_PROJECT_ID` を開く
-> 2. **PROD_FRONTEND_DOMAIN** と **PROD_BACKEND_DOMAIN** の DNS レコードを確認
-> 3. DNS プロバイダに登録
+> | ドメイン | タイプ | 値 |
+> |---|---|---|
+> | **PROD_FRONTEND_DOMAIN** | CNAME | `ghs.googlehosted.com.` |
+> | **PROD_BACKEND_DOMAIN** | CNAME | `ghs.googlehosted.com.` |
+>
+> DNS プロバイダにこれらの CNAME レコードを登録してください。
+> なお、Cloud Console (`https://console.cloud.google.com/run/domains?project=PROD_PROJECT_ID`) では SSL 証明書の発行状況を確認できます。
 
 ---
 

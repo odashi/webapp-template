@@ -12,7 +12,7 @@ variable "branch" {
   description = "Git branch that triggers the Cloud Build deploy (e.g. 'main' for dev, 'release' for prod)."
 }
 
-variable "config_root_dir" {
+variable "infra_dir" {
   type = string
 }
 

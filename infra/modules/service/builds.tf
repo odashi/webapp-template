@@ -14,7 +14,7 @@ resource "google_cloudbuild_trigger" "deploy" {
     }
   }
 
-  filename = "${var.config_root_dir}/modules/${var.service_type}/cloudbuild.yaml"
+  filename = "${var.infra_dir}/modules/${var.service_type}/cloudbuild.yaml"
 
   substitutions = merge(
     {

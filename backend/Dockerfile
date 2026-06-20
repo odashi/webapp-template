@@ -7,8 +7,8 @@ WORKDIR /app
 ENV PORT=8080
 ENV CORS_ORIGIN=http://localhost:5173
 
-COPY pyproject.toml .
-RUN uv pip install --system --compile-bytecode .
+COPY pyproject.toml uv.lock ./
+RUN uv sync --system --compile-bytecode --frozen --no-dev
 
 COPY src/ src/
 

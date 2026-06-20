@@ -13,5 +13,5 @@ export async function countCharacters(text: string): Promise<CountResponse> {
   if (!res.ok) {
     throw new Error(`HTTP error: ${res.status}`);
   }
-  return res.json() as Promise<CountResponse>;
+  return res.json() as CountResponse;
 }

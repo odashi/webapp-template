@@ -58,7 +58,7 @@ module "backend" {
   prefix                = "backend"
   service_type          = "backend"
   branch                = local.branch
-  config_root_dir       = local.infra_dir
+  infra_dir             = local.infra_dir
   project               = local.project
   region                = local.region
   domain                = local.domains.backend
@@ -78,7 +78,7 @@ module "frontend" {
   prefix                = "frontend"
   service_type          = "frontend"
   branch                = local.branch
-  config_root_dir       = local.infra_dir
+  infra_dir             = local.infra_dir
   project               = local.project
   region                = local.region
   domain                = local.domains.frontend

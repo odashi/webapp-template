@@ -28,7 +28,7 @@ steps:
       - "--execution-environment=gen2"
       - "--image=${_GAR_ROOT}/${_PREFIX}:${COMMIT_SHA}"
       - "--max-instances=2"
-      - "--memory=256Mi"
+      - "--memory=512Mi"
       - "--min-instances=0"
       - "--port=8080"
       - "--region=${_RUNNER_REGION}"

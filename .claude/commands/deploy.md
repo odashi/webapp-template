@@ -432,6 +432,8 @@ Tell the user:
 
 Wait for the user to confirm both dev builds succeed before proceeding.
 
+Note: Going forward, pushes to `main` that include changes under `backend/**/*` or `frontend/**/*` will auto-trigger the respective service build. Pushes that only change Terraform files (`infra/**/*`) will trigger only the `terraform-apply` trigger.
+
 ---
 
 ## Phase 11: Apply dev domain mappings
@@ -495,10 +497,17 @@ git push app init-config:release
 
 Tell the user:
 
-> deployment リポジトリの `release` ブランチに push しました。prod プロジェクトの Cloud Build が自動的に起動します。
+> deployment リポジトリの `release` ブランチに push しました。
 >
 > ビルド状況: `https://console.cloud.google.com/cloud-build/builds?project=PROD_PROJECT_ID`
->
+
+Wait up to 30 seconds. If `backend-deploy` and `frontend-deploy` do **not** appear automatically, it means the pushed commit did not change any files under `backend/**/*` or `frontend/**/*` (e.g., the most recent commit was a Terraform-only change). In that case, run them manually:
+
+```bash
+gcloud builds triggers run backend-deploy --branch=release --project=PROD_PROJECT_ID
+gcloud builds triggers run frontend-deploy --branch=release --project=PROD_PROJECT_ID
+```
+
 > 2つのビルドが実行されます:
 > - `backend-deploy` → Cloud Run に `backend-app` をデプロイ (prod)
 > - `frontend-deploy` → Cloud Run に `frontend-app` をデプロイ (prod)

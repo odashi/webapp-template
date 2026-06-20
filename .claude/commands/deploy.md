@@ -62,6 +62,37 @@ Show the user the values that were read and confirm before proceeding.
 
 ---
 
+## Phase 1b: Ensure working on init-config branch
+
+`init-config` is a **local-only** branch used to keep deployment configuration separate from template improvements. It is never pushed to remote independently.
+
+Check the current branch:
+
+```bash
+git branch --show-current
+```
+
+- If already on `init-config`: continue.
+- If `init-config` exists locally but is not checked out: `git checkout init-config`
+- If `init-config` does not exist yet: `git checkout -b init-config`
+
+Tell the user:
+
+> 設定ファイルへの変更は `init-config` ブランチで進めます。デプロイ準備が整ったら `main` にマージして push します。`init-config` 自体は remote には push しません。
+
+### If a template improvement is needed during the wizard
+
+When the user requests a fix to the wizard or template files (not deployment config):
+
+1. Commit any pending `init-config` changes: `git add -A && git commit -m "..."` (if any)
+2. `git checkout main`
+3. Apply the fix, commit, and push to remote
+4. `git checkout init-config`
+5. `git merge main` to bring the fix into `init-config`
+6. Resume the wizard
+
+---
+
 ## Phase 2: Fill in configuration placeholders
 
 Using the values read from `deploy.config.json`, edit the Terraform files to replace all placeholders.
@@ -226,24 +257,21 @@ Confirm with the user before proceeding.
 
 ---
 
-## Phase 5: Check git repository
+## Phase 5: Verify git repository
 
 ```bash
 git -C . rev-parse --is-inside-work-tree 2>/dev/null && echo "git_exists" || echo "no_git"
 ```
 
-If `no_git`, initialize and create the `main` branch:
+If `no_git`, initialize, create `main`, and then create `init-config`:
 
 ```bash
 git init
 git checkout -b main
+git checkout -b init-config
 ```
 
-If git already exists, just confirm the current branch is `main`:
-
-```bash
-git branch --show-current
-```
+If git already exists, confirm the current branch is `init-config` (Phase 1b should have handled this).
 
 ---
 
@@ -359,28 +387,36 @@ cd infra/prod && terraform apply -auto-approve
 
 ---
 
-## Phase 10: Push to `main` — deploy dev environment
+## Phase 10: Merge init-config to main and push — deploy dev environment
 
-Commit everything and push to `main`. The Cloud Build triggers for `backend-deploy` and `frontend-deploy` in the dev project will fire.
+All configuration is ready on `init-config`. Now merge it into `main` and push to trigger the dev Cloud Build.
+
+### 10-1. Commit remaining changes on init-config
+
+Make sure all changes are committed on `init-config`:
 
 ```bash
-git add infra/dev/_locals.tf infra/dev/main.tf \
-        infra/prod/_locals.tf infra/prod/main.tf \
-        frontend/package-lock.json
 git add -A
 git status
 ```
 
-Review staged files with the user, then commit and push:
+If there are uncommitted changes:
 
 ```bash
 git commit -m "Initial deployment configuration"
-git push -u origin main
+```
+
+### 10-2. Merge into main and push
+
+```bash
+git checkout main
+git merge --no-ff init-config -m "Merge init-config: initial deployment configuration"
+git push origin main
 ```
 
 Tell the user:
 
-> The code is on GitHub. Cloud Build in the **dev project** is now deploying.
+> `main` を push しました。Cloud Build が **dev プロジェクト** にデプロイを開始します。
 >
 > Monitor at: `https://console.cloud.google.com/cloud-build/builds?project=DEV_PROJECT_ID`
 >

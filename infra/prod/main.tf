@@ -1,8 +1,9 @@
 terraform {
-  # TODO: Replace with your prod GCS bucket name for Terraform state.
-  backend "gcs" {
-    bucket = "my-prod-project-id-terraform"
-  }
+  # Uncomment after the first `terraform apply` has created the GCS bucket,
+  # then run `terraform init -migrate-state` to move state to GCS.
+  # backend "gcs" {
+  #   bucket = "my-prod-project-id-terraform"
+  # }
 
   required_providers {
     google = {
@@ -54,15 +55,16 @@ module "backend" {
 
   depends_on = [google_project_service.common]
 
-  prefix          = "backend"
-  service_type    = "backend"
-  branch          = local.branch
-  config_root_dir = local.infra_dir
-  project         = local.project
-  region          = local.region
-  domain          = local.domains.backend
-  github_repository = local.github_repository
-  image_repository  = module.common.image_repository
+  prefix                = "backend"
+  service_type          = "backend"
+  branch                = local.branch
+  config_root_dir       = local.infra_dir
+  project               = local.project
+  region                = local.region
+  domain                = local.domains.backend
+  github_repository     = local.github_repository
+  image_repository      = module.common.image_repository
+  enable_domain_mapping = local.enable_domain_mapping
   extra_substitutions = {
     _FRONTEND_DOMAIN = local.domains.frontend
   }
@@ -73,15 +75,16 @@ module "frontend" {
 
   depends_on = [google_project_service.common]
 
-  prefix          = "frontend"
-  service_type    = "frontend"
-  branch          = local.branch
-  config_root_dir = local.infra_dir
-  project         = local.project
-  region          = local.region
-  domain          = local.domains.frontend
-  github_repository = local.github_repository
-  image_repository  = module.common.image_repository
+  prefix                = "frontend"
+  service_type          = "frontend"
+  branch                = local.branch
+  config_root_dir       = local.infra_dir
+  project               = local.project
+  region                = local.region
+  domain                = local.domains.frontend
+  github_repository     = local.github_repository
+  image_repository      = module.common.image_repository
+  enable_domain_mapping = local.enable_domain_mapping
   extra_substitutions = {
     _VITE_API_URL = "https://${local.domains.backend}"
   }

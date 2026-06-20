@@ -16,3 +16,9 @@ resource "google_project_iam_member" "owner" {
     prevent_destroy = true
   }
 }
+
+resource "google_service_account_iam_member" "cloudbuild_impersonation" {
+  service_account_id = google_service_account.terraform.name
+  role               = "roles/iam.serviceAccountTokenCreator"
+  member             = "serviceAccount:${var.project.number}@cloudbuild.gserviceaccount.com"
+}

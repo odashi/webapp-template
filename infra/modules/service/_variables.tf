@@ -51,3 +51,9 @@ variable "extra_substitutions" {
   type    = map(string)
   default = {}
 }
+
+variable "enable_domain_mapping" {
+  type        = bool
+  default     = false
+  description = "Set to true after Cloud Run services are deployed to create domain mappings."
+}

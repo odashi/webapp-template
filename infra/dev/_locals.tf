@@ -38,4 +38,7 @@ locals {
     frontend = "dev.example.com"
     backend  = "api-dev.example.com"
   }
+
+  # Set to true after Cloud Run services are deployed to enable domain mappings.
+  enable_domain_mapping = false
 }

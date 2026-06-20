@@ -133,7 +133,7 @@ After all edits, show the user a brief summary of every file changed. Ask them t
 
 ## Phase 3: Bootstrap dev GCP project
 
-Run each command, check for errors, and report the result.
+Only the Cloud Build API needs to be enabled before Terraform runs. Terraform will create everything else (GCS bucket, Terraform SA, IAM bindings, Cloud Build triggers) in Phase 8.
 
 ### 3-1. Set active project to dev
 
@@ -153,57 +153,11 @@ gcloud services enable \
   --project=DEV_PROJECT_ID
 ```
 
-### 3-3. Create Terraform state bucket in dev project
-
-```bash
-gcloud storage buckets describe gs://DEV_PROJECT_ID-terraform 2>&1
-```
-
-If not found:
-
-```bash
-gcloud storage buckets create gs://DEV_PROJECT_ID-terraform \
-  --project=DEV_PROJECT_ID \
-  --location=STORAGE_REGION \
-  --uniform-bucket-level-access
-```
-
-### 3-4. Create Terraform service account in dev project
-
-```bash
-gcloud iam service-accounts describe terraform@DEV_PROJECT_ID.iam.gserviceaccount.com \
-  --project=DEV_PROJECT_ID 2>&1
-```
-
-If not found:
-
-```bash
-gcloud iam service-accounts create terraform \
-  --display-name="Terraform service account" \
-  --project=DEV_PROJECT_ID
-
-gcloud projects add-iam-policy-binding DEV_PROJECT_ID \
-  --member="serviceAccount:terraform@DEV_PROJECT_ID.iam.gserviceaccount.com" \
-  --role="roles/owner"
-```
-
-### 3-5. Grant Cloud Build impersonation right in dev project
-
-```bash
-gcloud iam service-accounts add-iam-policy-binding \
-  terraform@DEV_PROJECT_ID.iam.gserviceaccount.com \
-  --member="serviceAccount:DEV_PROJECT_NUMBER@cloudbuild.gserviceaccount.com" \
-  --role="roles/iam.serviceAccountTokenCreator" \
-  --project=DEV_PROJECT_ID
-```
-
 Confirm with the user before proceeding.
 
 ---
 
 ## Phase 4: Bootstrap prod GCP project
-
-Repeat the same steps as Phase 3 for the prod project.
 
 ### 4-1. Enable required APIs in prod project
 
@@ -214,50 +168,6 @@ gcloud services enable \
   cloudresourcemanager.googleapis.com \
   iam.googleapis.com \
   run.googleapis.com \
-  --project=PROD_PROJECT_ID
-```
-
-### 4-2. Create Terraform state bucket in prod project
-
-```bash
-gcloud storage buckets describe gs://PROD_PROJECT_ID-terraform 2>&1
-```
-
-If not found:
-
-```bash
-gcloud storage buckets create gs://PROD_PROJECT_ID-terraform \
-  --project=PROD_PROJECT_ID \
-  --location=STORAGE_REGION \
-  --uniform-bucket-level-access
-```
-
-### 4-3. Create Terraform service account in prod project
-
-```bash
-gcloud iam service-accounts describe terraform@PROD_PROJECT_ID.iam.gserviceaccount.com \
-  --project=PROD_PROJECT_ID 2>&1
-```
-
-If not found:
-
-```bash
-gcloud iam service-accounts create terraform \
-  --display-name="Terraform service account" \
-  --project=PROD_PROJECT_ID
-
-gcloud projects add-iam-policy-binding PROD_PROJECT_ID \
-  --member="serviceAccount:terraform@PROD_PROJECT_ID.iam.gserviceaccount.com" \
-  --role="roles/owner"
-```
-
-### 4-4. Grant Cloud Build impersonation right in prod project
-
-```bash
-gcloud iam service-accounts add-iam-policy-binding \
-  terraform@PROD_PROJECT_ID.iam.gserviceaccount.com \
-  --member="serviceAccount:PROD_PROJECT_NUMBER@cloudbuild.gserviceaccount.com" \
-  --role="roles/iam.serviceAccountTokenCreator" \
   --project=PROD_PROJECT_ID
 ```
 
@@ -392,37 +302,21 @@ Wait for the user to confirm both before proceeding.
 
 ## Phase 8: Run Terraform for dev project
 
-### 8-1. Initialize
+The GCS backend is initially commented out in `infra/dev/main.tf`. This allows the first apply to run with local state and create the GCS bucket, after which state is migrated to GCS.
+
+### 8-1. Initialize (local state)
 
 ```bash
 cd infra/dev && terraform init
 ```
 
-### 8-2. Import bootstrap resources
-
-The GCS bucket and Terraform SA were created manually but are also declared in Terraform code. Import them:
-
-```bash
-cd infra/dev && terraform import \
-  module.terraform.google_storage_bucket.terraform \
-  DEV_PROJECT_ID-terraform
-```
-
-```bash
-cd infra/dev && terraform import \
-  module.terraform.google_service_account.terraform \
-  projects/DEV_PROJECT_ID/serviceAccounts/terraform@DEV_PROJECT_ID.iam.gserviceaccount.com
-```
-
-If an import fails because the resource was already imported (e.g. on a retry), continue.
-
-### 8-3. Plan and apply
+### 8-2. Plan and apply
 
 ```bash
 cd infra/dev && terraform plan
 ```
 
-Show the user a summary of resources to be created. Ask for confirmation, then:
+Show the user a summary of resources to be created (GCS bucket, Terraform SA, IAM bindings, Cloud Build triggers, Artifact Registry). Ask for confirmation, then:
 
 ```bash
 cd infra/dev && terraform apply -auto-approve
@@ -430,31 +324,42 @@ cd infra/dev && terraform apply -auto-approve
 
 Wait for completion. Report any errors.
 
+### 8-3. Uncomment GCS backend and migrate state
+
+Edit `infra/dev/main.tf` to uncomment the `backend "gcs"` block:
+
+```hcl
+  backend "gcs" {
+    bucket = "DEV_PROJECT_ID-terraform"
+  }
+```
+
+Then re-initialize to migrate local state to GCS:
+
+```bash
+cd infra/dev && terraform init -migrate-state
+```
+
+Answer `yes` when prompted to copy the existing state to the new backend.
+
+### 8-4. Commit lock file
+
+```bash
+git add infra/dev/.terraform.lock.hcl infra/dev/main.tf
+git commit -m "Enable GCS backend for dev Terraform state"
+```
+
 ---
 
 ## Phase 9: Run Terraform for prod project
 
-### 9-1. Initialize
+### 9-1. Initialize (local state)
 
 ```bash
 cd infra/prod && terraform init
 ```
 
-### 9-2. Import bootstrap resources
-
-```bash
-cd infra/prod && terraform import \
-  module.terraform.google_storage_bucket.terraform \
-  PROD_PROJECT_ID-terraform
-```
-
-```bash
-cd infra/prod && terraform import \
-  module.terraform.google_service_account.terraform \
-  projects/PROD_PROJECT_ID/serviceAccounts/terraform@PROD_PROJECT_ID.iam.gserviceaccount.com
-```
-
-### 9-3. Plan and apply
+### 9-2. Plan and apply
 
 ```bash
 cd infra/prod && terraform plan
@@ -465,6 +370,32 @@ Show what will be created. Ask for confirmation, then:
 ```bash
 cd infra/prod && terraform apply -auto-approve
 ```
+
+### 9-3. Uncomment GCS backend and migrate state
+
+Edit `infra/prod/main.tf` to uncomment the `backend "gcs"` block:
+
+```hcl
+  backend "gcs" {
+    bucket = "PROD_PROJECT_ID-terraform"
+  }
+```
+
+Then re-initialize:
+
+```bash
+cd infra/prod && terraform init -migrate-state
+```
+
+### 9-4. Commit lock file and push to deployment repo
+
+```bash
+git add infra/prod/.terraform.lock.hcl infra/prod/main.tf
+git commit -m "Enable GCS backend for prod Terraform state"
+git push app init-config:main
+```
+
+This push will trigger the dev Terraform CI (no-op since state is up to date).
 
 ---
 
@@ -505,10 +436,29 @@ Wait for the user to confirm both dev builds succeed before proceeding.
 
 ## Phase 11: Apply dev domain mappings
 
-After the Cloud Run services are deployed, run Terraform again to apply the domain mappings (which depend on the services existing):
+Cloud Run services are now deployed. Enable domain mappings by editing `infra/dev/_locals.tf`:
+
+Change:
+```hcl
+  enable_domain_mapping = false
+```
+to:
+```hcl
+  enable_domain_mapping = true
+```
+
+Then apply:
 
 ```bash
 cd infra/dev && terraform apply -auto-approve
+```
+
+Commit and push to the deployment repo so the state is reflected:
+
+```bash
+git add infra/dev/_locals.tf
+git commit -m "Enable dev domain mappings"
+git push app init-config:main
 ```
 
 After apply, tell the user:
@@ -561,8 +511,29 @@ Wait for the user to confirm both prod builds succeed.
 
 ## Phase 14: Apply prod domain mappings
 
+Enable domain mappings by editing `infra/prod/_locals.tf`:
+
+Change:
+```hcl
+  enable_domain_mapping = false
+```
+to:
+```hcl
+  enable_domain_mapping = true
+```
+
+Then apply:
+
 ```bash
 cd infra/prod && terraform apply -auto-approve
+```
+
+Commit and push to the deployment repo:
+
+```bash
+git add infra/prod/_locals.tf
+git commit -m "Enable prod domain mappings"
+git push app init-config:release
 ```
 
 After apply, tell the user:

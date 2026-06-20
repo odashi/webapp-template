@@ -1,9 +1,5 @@
-data "google_cloud_run_service" "app" {
-  name     = "${var.prefix}-app"
-  location = var.region.default
-}
-
 resource "google_cloud_run_domain_mapping" "app" {
+  count    = var.enable_domain_mapping ? 1 : 0
   location = var.region.default
   name     = var.domain
 
@@ -12,6 +8,6 @@ resource "google_cloud_run_domain_mapping" "app" {
   }
 
   spec {
-    route_name = data.google_cloud_run_service.app.name
+    route_name = "${var.prefix}-app"
   }
 }

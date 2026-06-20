@@ -1,70 +1,108 @@
 ---
 allowed-tools: Bash(gcloud:*), Bash(terraform:*), Bash(git:*), Bash(gh:*), Bash(npm:*), Bash(find:*), Bash(grep:*), Bash(ls:*), Read, Edit
-description: Interactive wizard to deploy this webapp template to GCP with dev and prod environments and CI/CD
+description: Interactive wizard to deploy this webapp template to GCP with separate dev and prod projects and CI/CD
 ---
 
 # Deployment Wizard
 
-You are an interactive deployment wizard for this webapp template. Guide the user through deploying two environments on Google Cloud Platform:
+You are an interactive deployment wizard for this webapp template. Guide the user through deploying two fully isolated environments on Google Cloud Platform:
 
-- **dev** — deployed from the `main` branch (trunk)
-- **prod** — deployed from the `release` branch
+- **dev** — its own GCP project, deployed from the `main` branch (trunk)
+- **prod** — its own GCP project, deployed from the `release` branch
 
-Trunk-based development model: developers commit to `main`. When the team is ready to release, `main` is merged into `release`, which triggers the prod deployment automatically.
+Each project has independent Cloud Build triggers, Cloud Run services, Artifact Registry, IAM, and Terraform state. Changes in one project cannot affect the other.
+
+Trunk-based development model: developers commit to `main` (deploys to dev automatically). When ready to release, `main` is merged into `release`, which triggers the prod deployment.
 
 Follow these phases in order. **Do not skip phases.** Summarize what was done at the end of each phase and confirm with the user before moving to the next.
 
 ---
 
-## Phase 1: Gather all configuration
+## Phase 1: Read configuration from deploy.config.json
 
-Tell the user you need the following values to configure both environments. Ask for all at once:
+Read `deploy.config.json` at the repository root.
 
-1. **GCP Project ID** — the project ID string (e.g. `my-project-123`). Must already exist with billing enabled.
-2. **GCP Project Number** — the 12-digit number from GCP Console > Project settings.
-3. **GitHub repository owner** — GitHub username or organization.
-4. **GitHub repository name** — the repo to create or use.
-5. **Dev frontend domain** — custom domain for the dev frontend (e.g. `dev.example.com`).
-6. **Dev backend domain** — custom domain for the dev API (e.g. `api-dev.example.com`).
-7. **Prod frontend domain** — custom domain for the prod frontend (e.g. `app.example.com`).
-8. **Prod backend domain** — custom domain for the prod API (e.g. `api.example.com`).
+If the file does not exist, tell the user:
 
-Store all eight values. Do not proceed until all are provided.
+> `deploy.config.json` が見つかりません。リポジトリルートに作成してください。
+> テンプレートは `deploy.config.json` の形式を参照してください。
+
+If the file exists, read it and validate that **none of the following placeholder values remain**:
+
+- `my-dev-project-id`
+- `my-prod-project-id`
+- `000000000000`
+- `my-github-owner`
+- `my-repo-name`
+- `dev.example.com`
+- `api-dev.example.com`
+- `app.example.com`
+- `api.example.com`
+
+If any placeholder remains, show the user which fields still need to be filled and tell them:
+
+> `deploy.config.json` を編集してすべての項目を実際の値に置き換えてから、再度ウィザードを起動してください。
+
+Do not proceed until the file is valid. If the user says they have updated it, re-read and re-validate.
+
+Once valid, extract and store the following variables for use throughout the wizard:
+
+- `DEV_PROJECT_ID` = `.dev.project_id`
+- `DEV_PROJECT_NUMBER` = `.dev.project_number`
+- `PROD_PROJECT_ID` = `.prod.project_id`
+- `PROD_PROJECT_NUMBER` = `.prod.project_number`
+- `GITHUB_OWNER` = `.github.owner`
+- `GITHUB_REPO` = `.github.name`
+- `DEV_FRONTEND_DOMAIN` = `.domains.dev.frontend`
+- `DEV_BACKEND_DOMAIN` = `.domains.dev.backend`
+- `PROD_FRONTEND_DOMAIN` = `.domains.prod.frontend`
+- `PROD_BACKEND_DOMAIN` = `.domains.prod.backend`
+
+Show the user the values that were read and confirm before proceeding.
 
 ---
 
 ## Phase 2: Fill in configuration placeholders
 
-Edit `infra/_locals.tf` to replace all placeholder values:
+Using the values read from `deploy.config.json`, edit the Terraform files to replace all placeholders.
 
-- `my-project-id` → GCP Project ID
-- `000000000000` → GCP Project Number
-- `my-github-owner` → GitHub owner
-- `my-repo-name` → GitHub repo name
-- `dev.example.com` → dev frontend domain
-- `api-dev.example.com` → dev backend domain
-- `app.example.com` → prod frontend domain
-- `api.example.com` → prod backend domain
+Edit `infra/dev/_locals.tf`:
+- `my-dev-project-id` → `DEV_PROJECT_ID`
+- `000000000000` → `DEV_PROJECT_NUMBER`
+- `my-github-owner` → `GITHUB_OWNER`
+- `my-repo-name` → `GITHUB_REPO`
+- `dev.example.com` → `DEV_FRONTEND_DOMAIN`
+- `api-dev.example.com` → `DEV_BACKEND_DOMAIN`
 
-Edit `infra/main.tf` to replace the GCS backend bucket name:
+Edit `infra/dev/main.tf`:
+- `my-dev-project-id-terraform` → `DEV_PROJECT_ID-terraform`
 
-- `my-project-id-terraform` → `{project_id}-terraform`
+Edit `infra/prod/_locals.tf`:
+- `my-prod-project-id` → `PROD_PROJECT_ID`
+- `000000000000` → `PROD_PROJECT_NUMBER`
+- `my-github-owner` → `GITHUB_OWNER`
+- `my-repo-name` → `GITHUB_REPO`
+- `app.example.com` → `PROD_FRONTEND_DOMAIN`
+- `api.example.com` → `PROD_BACKEND_DOMAIN`
 
-Show the user a brief summary of every change made. Ask them to confirm before proceeding.
+Edit `infra/prod/main.tf`:
+- `my-prod-project-id-terraform` → `PROD_PROJECT_ID-terraform`
+
+After all edits, show the user a brief summary of every file changed. Ask them to confirm before proceeding.
 
 ---
 
-## Phase 3: Bootstrap — GCP prerequisites
+## Phase 3: Bootstrap dev GCP project
 
 Run each command, check for errors, and report the result.
 
-### 3-1. Set active project
+### 3-1. Set active project to dev
 
 ```bash
-gcloud config set project PROJECT_ID
+gcloud config set project DEV_PROJECT_ID
 ```
 
-### 3-2. Enable required APIs
+### 3-2. Enable required APIs in dev project
 
 ```bash
 gcloud services enable \
@@ -72,121 +110,166 @@ gcloud services enable \
   cloudbuild.googleapis.com \
   cloudresourcemanager.googleapis.com \
   iam.googleapis.com \
-  run.googleapis.com
+  run.googleapis.com \
+  --project=DEV_PROJECT_ID
 ```
 
-Wait for completion.
-
-### 3-3. Create Terraform state bucket
-
-Check first:
+### 3-3. Create Terraform state bucket in dev project
 
 ```bash
-gcloud storage buckets describe gs://PROJECT_ID-terraform 2>&1
+gcloud storage buckets describe gs://DEV_PROJECT_ID-terraform 2>&1
 ```
 
 If not found:
 
 ```bash
-gcloud storage buckets create gs://PROJECT_ID-terraform \
+gcloud storage buckets create gs://DEV_PROJECT_ID-terraform \
+  --project=DEV_PROJECT_ID \
   --location=ASIA-NORTHEAST1 \
   --uniform-bucket-level-access
 ```
 
-### 3-4. Create Terraform service account
-
-Check first:
+### 3-4. Create Terraform service account in dev project
 
 ```bash
-gcloud iam service-accounts describe terraform@PROJECT_ID.iam.gserviceaccount.com 2>&1
+gcloud iam service-accounts describe terraform@DEV_PROJECT_ID.iam.gserviceaccount.com \
+  --project=DEV_PROJECT_ID 2>&1
 ```
 
 If not found:
 
 ```bash
 gcloud iam service-accounts create terraform \
-  --display-name="Terraform service account"
+  --display-name="Terraform service account" \
+  --project=DEV_PROJECT_ID
 
-gcloud projects add-iam-policy-binding PROJECT_ID \
-  --member="serviceAccount:terraform@PROJECT_ID.iam.gserviceaccount.com" \
+gcloud projects add-iam-policy-binding DEV_PROJECT_ID \
+  --member="serviceAccount:terraform@DEV_PROJECT_ID.iam.gserviceaccount.com" \
   --role="roles/owner"
 ```
 
-### 3-5. Grant Cloud Build impersonation right
-
-This lets Cloud Build runners act as the Terraform SA:
+### 3-5. Grant Cloud Build impersonation right in dev project
 
 ```bash
 gcloud iam service-accounts add-iam-policy-binding \
-  terraform@PROJECT_ID.iam.gserviceaccount.com \
-  --member="serviceAccount:PROJECT_NUMBER@cloudbuild.gserviceaccount.com" \
-  --role="roles/iam.serviceAccountTokenCreator"
+  terraform@DEV_PROJECT_ID.iam.gserviceaccount.com \
+  --member="serviceAccount:DEV_PROJECT_NUMBER@cloudbuild.gserviceaccount.com" \
+  --role="roles/iam.serviceAccountTokenCreator" \
+  --project=DEV_PROJECT_ID
 ```
 
 Confirm with the user before proceeding.
 
 ---
 
-## Phase 4: Initialize git repository and create GitHub repo
+## Phase 4: Bootstrap prod GCP project
 
-### 4-1. Check git state
+Repeat the same steps as Phase 3 for the prod project.
+
+### 4-1. Enable required APIs in prod project
+
+```bash
+gcloud services enable \
+  artifactregistry.googleapis.com \
+  cloudbuild.googleapis.com \
+  cloudresourcemanager.googleapis.com \
+  iam.googleapis.com \
+  run.googleapis.com \
+  --project=PROD_PROJECT_ID
+```
+
+### 4-2. Create Terraform state bucket in prod project
+
+```bash
+gcloud storage buckets describe gs://PROD_PROJECT_ID-terraform 2>&1
+```
+
+If not found:
+
+```bash
+gcloud storage buckets create gs://PROD_PROJECT_ID-terraform \
+  --project=PROD_PROJECT_ID \
+  --location=ASIA-NORTHEAST1 \
+  --uniform-bucket-level-access
+```
+
+### 4-3. Create Terraform service account in prod project
+
+```bash
+gcloud iam service-accounts describe terraform@PROD_PROJECT_ID.iam.gserviceaccount.com \
+  --project=PROD_PROJECT_ID 2>&1
+```
+
+If not found:
+
+```bash
+gcloud iam service-accounts create terraform \
+  --display-name="Terraform service account" \
+  --project=PROD_PROJECT_ID
+
+gcloud projects add-iam-policy-binding PROD_PROJECT_ID \
+  --member="serviceAccount:terraform@PROD_PROJECT_ID.iam.gserviceaccount.com" \
+  --role="roles/owner"
+```
+
+### 4-4. Grant Cloud Build impersonation right in prod project
+
+```bash
+gcloud iam service-accounts add-iam-policy-binding \
+  terraform@PROD_PROJECT_ID.iam.gserviceaccount.com \
+  --member="serviceAccount:PROD_PROJECT_NUMBER@cloudbuild.gserviceaccount.com" \
+  --role="roles/iam.serviceAccountTokenCreator" \
+  --project=PROD_PROJECT_ID
+```
+
+Confirm with the user before proceeding.
+
+---
+
+## Phase 5: Check git repository
 
 ```bash
 git -C . rev-parse --is-inside-work-tree 2>/dev/null && echo "git_exists" || echo "no_git"
 ```
 
-If `no_git`:
+If `no_git`, initialize and create the `main` branch:
 
 ```bash
 git init
 git checkout -b main
 ```
 
-### 4-2. Create GitHub repository
-
-Check first:
+If git already exists, just confirm the current branch is `main`:
 
 ```bash
-gh repo view OWNER/REPO_NAME --json name 2>&1
-```
-
-If not found, ask the user whether they want a private or public repository (default: private), then create it:
-
-```bash
-gh repo create OWNER/REPO_NAME --private
-```
-
-Set the remote:
-
-```bash
-git remote remove origin 2>/dev/null || true
-git remote add origin https://github.com/OWNER/REPO_NAME.git
+git branch --show-current
 ```
 
 ---
 
-## Phase 5: Connect GitHub to Cloud Build (manual step)
-
-The GitHub repository must exist (Phase 4) before connecting it.
+## Phase 6: Connect GitHub to Cloud Build (manual step — both projects)
 
 Tell the user:
 
-> Cloud Build needs access to your GitHub repository. Please do the following:
+> Cloud Build in **both** projects needs access to your GitHub repository. Please complete this for each project:
 >
-> 1. Open in your browser:
->    `https://console.cloud.google.com/cloud-build/repositories/2nd-gen?project=PROJECT_ID`
-> 2. Click **Connect repository**.
-> 3. Select **GitHub** and authorize access to your account if prompted.
-> 4. Find and select **OWNER/REPO_NAME**.
-> 5. Complete the connection wizard.
+> **Dev project:**
+> 1. Open: `https://console.cloud.google.com/cloud-build/repositories/2nd-gen?project=DEV_PROJECT_ID`
+> 2. Click **Connect repository** → select **GitHub** → authorize if prompted.
+> 3. Find and select **OWNER/REPO_NAME** → complete the wizard.
 >
-> Let me know when done.
+> **Prod project:**
+> 1. Open: `https://console.cloud.google.com/cloud-build/repositories/2nd-gen?project=PROD_PROJECT_ID`
+> 2. Click **Connect repository** → select **GitHub** → authorize if prompted.
+> 3. Find and select **OWNER/REPO_NAME** → complete the wizard.
+>
+> Let me know when both connections are confirmed.
 
-Wait for the user to confirm.
+Wait for the user to confirm both before proceeding.
 
 ---
 
-## Phase 6: Generate frontend package lock file
+## Phase 7: Generate frontend package lock file
 
 Required for Docker's `npm ci`:
 
@@ -196,54 +279,94 @@ cd frontend && npm install
 
 ---
 
-## Phase 7: Run Terraform
+## Phase 8: Run Terraform for dev project
 
-### 7-1. Initialize
+### 8-1. Initialize
 
 ```bash
-cd infra && terraform init
+cd infra/dev && terraform init
 ```
 
-### 7-2. Import bootstrap resources
+### 8-2. Import bootstrap resources
 
-The GCS bucket and Terraform SA were created manually but are also declared in Terraform code. Import them to avoid conflicts:
+The GCS bucket and Terraform SA were created manually but are also declared in Terraform code. Import them:
 
 ```bash
-cd infra && terraform import \
+cd infra/dev && terraform import \
   module.terraform.google_storage_bucket.terraform \
-  PROJECT_ID-terraform
+  DEV_PROJECT_ID-terraform
 ```
 
 ```bash
-cd infra && terraform import \
+cd infra/dev && terraform import \
   module.terraform.google_service_account.terraform \
-  projects/PROJECT_ID/serviceAccounts/terraform@PROJECT_ID.iam.gserviceaccount.com
+  projects/DEV_PROJECT_ID/serviceAccounts/terraform@DEV_PROJECT_ID.iam.gserviceaccount.com
 ```
 
 If an import fails because the resource was already imported (e.g. on a retry), that is fine — continue.
 
-### 7-3. Plan and apply
+### 8-3. Plan and apply
 
 ```bash
-cd infra && terraform plan
+cd infra/dev && terraform plan
 ```
 
-Show the user what will be created. Ask for confirmation, then:
+Show the user a summary of resources to be created. Ask for confirmation, then:
 
 ```bash
-cd infra && terraform apply -auto-approve
+cd infra/dev && terraform apply -auto-approve
 ```
 
 Wait for completion. Report any errors.
 
 ---
 
-## Phase 8: Push to `main` — deploy dev environment
+## Phase 9: Run Terraform for prod project
 
-Commit everything and push to `main`. The Cloud Build triggers for `backend-dev` and `frontend-dev` will fire.
+Repeat Phase 8 for the prod project.
+
+### 9-1. Initialize
 
 ```bash
-git add infra/_locals.tf infra/main.tf frontend/package-lock.json
+cd infra/prod && terraform init
+```
+
+### 9-2. Import bootstrap resources
+
+```bash
+cd infra/prod && terraform import \
+  module.terraform.google_storage_bucket.terraform \
+  PROD_PROJECT_ID-terraform
+```
+
+```bash
+cd infra/prod && terraform import \
+  module.terraform.google_service_account.terraform \
+  projects/PROD_PROJECT_ID/serviceAccounts/terraform@PROD_PROJECT_ID.iam.gserviceaccount.com
+```
+
+### 9-3. Plan and apply
+
+```bash
+cd infra/prod && terraform plan
+```
+
+Show the user what will be created. Ask for confirmation, then:
+
+```bash
+cd infra/prod && terraform apply -auto-approve
+```
+
+---
+
+## Phase 10: Push to `main` — deploy dev environment
+
+Commit everything and push to `main`. The Cloud Build triggers for `backend-deploy` and `frontend-deploy` in the dev project will fire.
+
+```bash
+git add infra/dev/_locals.tf infra/dev/main.tf \
+        infra/prod/_locals.tf infra/prod/main.tf \
+        frontend/package-lock.json
 git add -A
 git status
 ```
@@ -257,62 +380,53 @@ git push -u origin main
 
 Tell the user:
 
-> The code is now on GitHub. Cloud Build is building and deploying the **dev** environment.
+> The code is on GitHub. Cloud Build in the **dev project** is now deploying.
 >
-> Monitor progress at:
-> `https://console.cloud.google.com/cloud-build/builds?project=PROJECT_ID`
+> Monitor at: `https://console.cloud.google.com/cloud-build/builds?project=DEV_PROJECT_ID`
 >
-> Two builds will run in parallel:
-> - `backend-dev-deploy` → deploys `backend-dev-app` to Cloud Run
-> - `frontend-dev-deploy` → deploys `frontend-dev-app` to Cloud Run
+> Two builds will run:
+> - `backend-deploy` → deploys `backend-app` to Cloud Run (dev)
+> - `frontend-deploy` → deploys `frontend-app` to Cloud Run (dev)
 >
 > This typically takes 5–10 minutes.
 
-Ask the user to monitor and confirm when both builds succeed before proceeding.
+Ask the user to confirm when both dev builds succeed before proceeding.
 
 ---
 
-## Phase 9: Apply dev domain mappings
-
-With dev Cloud Run services now deployed, run Terraform to create the dev domain mappings:
+## Phase 11: Apply dev domain mappings
 
 ```bash
-cd infra && terraform apply \
-  -target=module.backend_dev \
-  -target=module.frontend_dev \
-  -auto-approve
+cd infra/dev && terraform apply -auto-approve
 ```
 
 After apply, tell the user:
 
-> Add these DNS records at your DNS provider:
+> Add DNS records for the dev domains:
 >
-> 1. Open: `https://console.cloud.google.com/run/domains?project=PROJECT_ID`
-> 2. Note the DNS records shown for **DEV_FRONTEND_DOMAIN** and **DEV_BACKEND_DOMAIN**.
-> 3. Add them at your DNS provider (A or CNAME record for each).
-> 4. DNS propagation typically completes within an hour.
+> 1. Open: `https://console.cloud.google.com/run/domains?project=DEV_PROJECT_ID`
+> 2. Note the DNS records for **DEV_FRONTEND_DOMAIN** and **DEV_BACKEND_DOMAIN**.
+> 3. Add them at your DNS provider. Propagation typically completes within an hour.
 
 ---
 
-## Phase 10: Verify dev environment
-
-Check that dev services are running:
+## Phase 12: Verify dev environment
 
 ```bash
-gcloud run services list --region=asia-northeast1 --project=PROJECT_ID
+gcloud run services list --region=asia-northeast1 --project=DEV_PROJECT_ID
 ```
 
-Confirm `backend-dev-app` and `frontend-dev-app` are listed with status `READY`.
+Confirm `backend-app` and `frontend-app` are `READY`.
 
-Ask the user to open the dev frontend URL in their browser and confirm it loads correctly. The backend health check at `https://DEV_BACKEND_DOMAIN/health` should return `{"status":"ok"}`.
+Ask the user to open the dev frontend URL and confirm it loads. The backend health check at `https://DEV_BACKEND_DOMAIN/health` should return `{"status":"ok"}`.
 
-Once the user confirms dev is working, proceed to set up prod.
+Once the user confirms dev is working, proceed to deploy prod.
 
 ---
 
-## Phase 11: Push to `release` — deploy prod environment
+## Phase 13: Push to `release` — deploy prod environment
 
-Create the `release` branch from `main` and push it. This triggers the Cloud Build builds for `backend-prod` and `frontend-prod`.
+Create the `release` branch from `main` and push it. Cloud Build in the prod project will fire.
 
 ```bash
 git checkout -b release
@@ -322,64 +436,60 @@ git checkout main
 
 Tell the user:
 
-> The `release` branch is now on GitHub. Cloud Build is deploying the **prod** environment.
+> The `release` branch is on GitHub. Cloud Build in the **prod project** is deploying.
+>
+> Monitor at: `https://console.cloud.google.com/cloud-build/builds?project=PROD_PROJECT_ID`
 >
 > Two builds will run:
-> - `backend-prod-deploy` → deploys `backend-prod-app` to Cloud Run
-> - `frontend-prod-deploy` → deploys `frontend-prod-app` to Cloud Run
->
-> Monitor at:
-> `https://console.cloud.google.com/cloud-build/builds?project=PROJECT_ID`
+> - `backend-deploy` → deploys `backend-app` to Cloud Run (prod)
+> - `frontend-deploy` → deploys `frontend-app` to Cloud Run (prod)
 
 Ask the user to confirm when both prod builds succeed.
 
 ---
 
-## Phase 12: Apply prod domain mappings
-
-With prod Cloud Run services now deployed, apply the remaining domain mappings:
+## Phase 14: Apply prod domain mappings
 
 ```bash
-cd infra && terraform apply -auto-approve
+cd infra/prod && terraform apply -auto-approve
 ```
 
 After apply, tell the user:
 
 > Add DNS records for the prod domains:
 >
-> 1. Open: `https://console.cloud.google.com/run/domains?project=PROJECT_ID`
+> 1. Open: `https://console.cloud.google.com/run/domains?project=PROD_PROJECT_ID`
 > 2. Note the DNS records for **PROD_FRONTEND_DOMAIN** and **PROD_BACKEND_DOMAIN**.
 > 3. Add them at your DNS provider.
 
 ---
 
-## Phase 13: Verify prod environment and summarize
-
-Check prod services:
+## Phase 15: Verify prod environment and summarize
 
 ```bash
-gcloud run services list --region=asia-northeast1 --project=PROJECT_ID
+gcloud run services list --region=asia-northeast1 --project=PROD_PROJECT_ID
 ```
 
-Confirm `backend-prod-app` and `frontend-prod-app` are `READY`.
+Confirm `backend-app` and `frontend-app` are `READY`.
 
-Ask the user to verify the prod frontend URL and `https://PROD_BACKEND_DOMAIN/health`.
-
-Check all Cloud Build triggers exist:
+Check Cloud Build triggers in both projects:
 
 ```bash
-gcloud builds triggers list --project=PROJECT_ID
+gcloud builds triggers list --project=DEV_PROJECT_ID
+gcloud builds triggers list --project=PROD_PROJECT_ID
 ```
 
-Summarize the completed deployment for the user:
+Summarize the completed deployment:
 
-- **Dev environment**: DEV_FRONTEND_DOMAIN (deploys on push to `main`)
-- **Prod environment**: PROD_FRONTEND_DOMAIN (deploys on push to `release`)
-- **How to release**: merge `main` into `release` and push — prod deploys automatically
-- **Monitor builds**: `https://console.cloud.google.com/cloud-build/builds?project=PROJECT_ID`
-- **Terraform changes**: push to `main` with infra changes triggers `terraform plan`; push to `release` triggers `terraform apply` (wait for plan PR first)
-
-Wait, correct the terraform trigger behavior: review `infra/modules/terraform/builds.tf`. The `terraform plan` trigger fires on PRs targeting `main`, and `terraform apply` fires on push to `main`. Clarify this in the summary.
+- **Dev environment**: DEV_FRONTEND_DOMAIN
+  - Deploys automatically on push to `main` (dev project)
+  - Terraform CI: plan on PR to `main`, apply on push to `main`
+- **Prod environment**: PROD_FRONTEND_DOMAIN
+  - Deploys automatically on push to `release` (prod project)
+  - Terraform CI: plan on PR to `release`, apply on push to `release`
+- **How to release**: merge `main` into `release` and push → prod deploys automatically
+- **Monitor dev builds**: `https://console.cloud.google.com/cloud-build/builds?project=DEV_PROJECT_ID`
+- **Monitor prod builds**: `https://console.cloud.google.com/cloud-build/builds?project=PROD_PROJECT_ID`
 
 ---
 

@@ -1,0 +1,24 @@
+{
+  "dev": {
+    "project_id": "my-dev-project-id",
+    "project_number": "000000000000"
+  },
+  "prod": {
+    "project_id": "my-prod-project-id",
+    "project_number": "000000000000"
+  },
+  "github": {
+    "owner": "my-github-owner",
+    "name": "my-repo-name"
+  },
+  "domains": {
+    "dev": {
+      "frontend": "dev.example.com",
+      "backend": "api-dev.example.com"
+    },
+    "prod": {
+      "frontend": "app.example.com",
+      "backend": "api.example.com"
+    }
+  }
+}

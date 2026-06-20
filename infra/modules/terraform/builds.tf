@@ -11,23 +11,23 @@ resource "google_cloudbuild_trigger" "terraform" {
     dynamic "pull_request" {
       for_each = each.key == "plan" ? [1] : []
       content {
-        branch = "^main$"
+        branch = "^${var.branch}$"
       }
     }
     dynamic "push" {
       for_each = each.key == "apply" ? [1] : []
       content {
-        branch = "^main$"
+        branch = "^${var.branch}$"
       }
     }
   }
 
   service_account = google_service_account.terraform.id
-  filename        = "${var.config_root_dir}/modules/terraform/${each.key}.cloudbuild.yaml"
+  filename        = "${var.infra_dir}/modules/terraform/${each.key}.cloudbuild.yaml"
   substitutions = {
-    _CHDIR = var.config_root_dir
+    _CHDIR = var.terraform_chdir
   }
 
-  included_files = ["infra/**/*"]
+  included_files = ["${var.terraform_chdir}/**/*", "${var.infra_dir}/modules/**/*"]
   ignored_files  = ["**/*.md"]
 }

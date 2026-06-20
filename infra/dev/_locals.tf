@@ -1,5 +1,8 @@
 locals {
-  config_root_dir = "./infra"
+  # Path to shared infra modules in the repository (for Cloud Build YAML paths).
+  infra_dir = "./infra"
+  # Path to this Terraform root (passed as -chdir to Cloud Build terraform runs).
+  env_dir = "./infra/dev"
 
   enabled_services = [
     "artifactregistry.googleapis.com",
@@ -9,9 +12,9 @@ locals {
     "run.googleapis.com",
   ]
 
-  # TODO: Replace with your GCP project values.
+  # TODO: Replace with your dev GCP project values.
   project = {
-    id     = "my-project-id"
+    id     = "my-dev-project-id"
     number = "000000000000"
   }
 
@@ -26,15 +29,12 @@ locals {
     name  = "my-repo-name"
   }
 
-  # TODO: Replace with your custom domains for each environment.
+  # Trunk: deploy dev on every push to main.
+  branch = "main"
+
+  # TODO: Replace with your dev custom domains.
   domains = {
-    dev = {
-      frontend = "dev.example.com"
-      backend  = "api-dev.example.com"
-    }
-    prod = {
-      frontend = "app.example.com"
-      backend  = "api.example.com"
-    }
+    frontend = "dev.example.com"
+    backend  = "api-dev.example.com"
   }
 }

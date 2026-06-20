@@ -1,11 +1,11 @@
 ---
-allowed-tools: Bash(gcloud:*), Bash(terraform:*), Bash(git:*), Bash(gh:*), Bash(npm:*), Bash(find:*), Bash(grep:*), Bash(ls:*), Read, Edit
+allowed-tools: Bash(gcloud:*), Bash(terraform:*), Bash(git:*), Bash(gh:*), Bash(npm:*), Bash(find:*), Bash(grep:*), Bash(ls:*), Read, Edit, Write
 description: Interactive wizard to deploy this webapp template to GCP with separate dev and prod projects and CI/CD
 ---
 
-# Deployment Wizard
+# Installation Wizard
 
-You are an interactive deployment wizard for this webapp template. Guide the user through deploying two fully isolated environments on Google Cloud Platform:
+You are an interactive installation wizard for this webapp template. Guide the user through deploying two fully isolated environments on Google Cloud Platform:
 
 - **dev** — its own GCP project, deployed from the `main` branch (trunk)
 - **prod** — its own GCP project, deployed from the `release` branch
@@ -18,14 +18,107 @@ Follow these phases in order. **Do not skip phases.** Summarize what was done at
 
 ---
 
+## Phase 0: Set communication language
+
+Ask the user:
+
+> What language would you like to use during this wizard? (e.g., English, 日本語, etc.)
+
+After the user replies, write (or append) the following to `CLAUDE.md` at the repository root:
+
+```markdown
+## Language
+
+Respond to the user in [CHOSEN_LANGUAGE].
+```
+
+Replace `[CHOSEN_LANGUAGE]` with the language the user chose (e.g., `English`, `Japanese`). If `CLAUDE.md` already exists, read it first and append the `## Language` section only if it is not already present; otherwise update the existing value.
+
+From this point forward, communicate with the user in the chosen language.
+
+---
+
+## Phase 0b: Check prerequisite tools
+
+Before doing any work, verify that required tools are installed. Run:
+
+```bash
+gcloud --version 2>&1 | head -1
+terraform --version 2>&1 | head -1
+git --version 2>&1
+npm --version 2>&1
+gh --version 2>&1 | head -1
+```
+
+Required tools (wizard cannot proceed without these):
+
+| Tool | Purpose |
+|---|---|
+| `gcloud` | Enable GCP APIs, manage Cloud Build triggers |
+| `terraform` | Provision GCP infrastructure |
+| `git` | Manage branches and push to deployment repo |
+| `npm` | Generate `package-lock.json` for frontend Docker build |
+
+Optional tool:
+
+| Tool | Purpose |
+|---|---|
+| `gh` | Create the GitHub deployment repository automatically |
+
+If any **required** tool is missing, tell the user which tools need to be installed and ask them to install the missing tools before continuing. Do not proceed until all required tools are available.
+
+If `gh` is missing, note that the user will need to create the GitHub repository manually in Phase 6.
+
+Once all required tools are present, confirm with the user before proceeding.
+
+---
+
+## Phase 0c: What this wizard will do
+
+Explain to the user what this wizard will do, including all changes it makes to external systems. Say:
+
+> This wizard will set up a complete deployment environment for this webapp. Here is what it will do:
+>
+> **GitHub changes:**
+> - Create a new GitHub repository (`GITHUB_OWNER/GITHUB_REPO`) that will hold your deployment code
+> - Push your configured code to that repository
+> - Install the Cloud Build GitHub App on that repository (for both GCP projects)
+>
+> **Google Cloud changes (dev project: `DEV_PROJECT_ID`):**
+> - Enable APIs: Artifact Registry, Cloud Build, Cloud Resource Manager, IAM, Cloud Run
+> - Create a GCS bucket for Terraform state
+> - Create a Terraform service account with the necessary IAM roles
+> - Create an Artifact Registry repository for Docker images
+> - Create Cloud Build triggers (CI/CD pipelines for backend, frontend, and Terraform)
+> - Deploy backend and frontend applications to Cloud Run
+> - Create Cloud Run domain mappings for your custom domains
+>
+> **Google Cloud changes (prod project: `PROD_PROJECT_ID`):**
+> - Same as above for the prod project
+>
+> **Local file changes:**
+> - `CLAUDE.md` — language preference (already done in Phase 0)
+> - `infra/dev/_locals.tf`, `infra/dev/main.tf` — filled with your dev project values
+> - `infra/prod/_locals.tf`, `infra/prod/main.tf` — filled with your prod project values
+>
+> Note: placeholder values are only filled on the local `init-config` branch. The template repository (`origin`) will keep placeholder values on `main`.
+>
+> **DNS changes (manual):**
+> - You will need to add CNAME records in your DNS provider for your custom domains (shown later in the wizard).
+>
+> Do you want to proceed?
+
+Wait for the user to confirm before continuing.
+
+---
+
 ## Phase 1: Read configuration from deploy.config.json
 
 Read `deploy.config.json` at the repository root.
 
 If the file does not exist, tell the user:
 
-> `deploy.config.json` が見つかりません。リポジトリルートに作成してください。
-> テンプレートは `deploy.config.json` の形式を参照してください。
+> `deploy.config.json` was not found at the repository root. Please create it using the placeholder values in the existing template as a guide.
 
 If the file exists, read it and validate that **none of the following placeholder values remain**:
 
@@ -43,7 +136,7 @@ If the file exists, read it and validate that **none of the following placeholde
 
 If any placeholder remains, show the user which fields still need to be filled and tell them:
 
-> `deploy.config.json` を編集してすべての項目を実際の値に置き換えてから、再度ウィザードを起動してください。
+> Please edit `deploy.config.json` and replace all placeholder values with your actual values, then run the wizard again.
 
 Do not proceed until the file is valid. If the user says they have updated it, re-read and re-validate.
 
@@ -68,7 +161,7 @@ Show the user the values that were read and confirm before proceeding.
 
 ## Phase 1b: Ensure working on init-config branch
 
-`init-config` is a **local-only** branch used to keep deployment configuration separate from template improvements. It is never pushed to remote independently.
+`init-config` is a **local-only** branch used to keep deployment configuration separate from template improvements. It is never pushed to `origin` (the template repo).
 
 Check the current branch:
 
@@ -82,7 +175,7 @@ git branch --show-current
 
 Tell the user:
 
-> 設定ファイルへの変更は `init-config` ブランチで進めます。デプロイ準備が整ったら `main` にマージして push します。`init-config` 自体は remote には push しません。
+> Configuration changes will be made on the `init-config` branch. This branch is never pushed to the template repository (`origin`) — it is only pushed to the deployment repository (`app`). Template improvements stay on `main`.
 
 ### If a template improvement is needed during the wizard
 
@@ -195,7 +288,7 @@ If git already exists, confirm the current branch is `init-config` (Phase 1b sho
 
 ## Phase 6: Create deployment repository and push
 
-This phase creates the GitHub deployment repository and pushes the configured code to it. The deployment repository (`app` remote) is separate from the template repository (`origin`) and receives all future deployment pushes. The `origin` remote (webapp-template) always retains placeholder values on `main`.
+This phase creates the GitHub deployment repository and pushes the configured code to it. The deployment repository (`app` remote) is separate from the template repository (`origin`) and receives all future deployment pushes. The `origin` remote always retains placeholder values on `main`.
 
 ### 6-1. Generate frontend package lock file
 
@@ -234,13 +327,13 @@ gh repo create GITHUB_OWNER/GITHUB_REPO --private --description "Web application
 
 If `gh` is not available or the user prefers to create it manually, tell them:
 
-> GitHub に新しいリポジトリを作成してください:
+> Please create a new GitHub repository:
 > - URL: `https://github.com/new`
 > - Owner: **GITHUB_OWNER**
 > - Repository name: **GITHUB_REPO**
-> - **README・.gitignore・ライセンスによる初期化は行わないでください**
+> - **Do not initialize the repository with a README, .gitignore, or license**
 >
-> 作成が完了したら教えてください。
+> Let me know when it is created.
 
 Wait for the user to confirm the repository exists before continuing.
 
@@ -278,23 +371,25 @@ The Terraform modules use 1st gen `google_cloudbuild_trigger` resources with a `
 
 Tell the user:
 
-> Cloud Build の **両プロジェクト** に GitHub App を接続してください。
+> Please connect the Cloud Build GitHub App to the deployment repository in **both GCP projects**.
 >
-> **Dev プロジェクト:**
-> 1. `https://console.cloud.google.com/cloud-build/triggers?project=DEV_PROJECT_ID` を開く
-> 2. **Connect Repository** をクリック
-> 3. ソースとして **GitHub (Cloud Build GitHub App)** を選択
-> 4. GitHub を認証し、**GITHUB_OWNER/GITHUB_REPO** を選択してウィザードを完了
+> **Dev project:**
+> 1. Open `https://console.cloud.google.com/cloud-build/triggers?project=DEV_PROJECT_ID`
+> 2. Click **Connect Repository**
+> 3. Select **GitHub (Cloud Build GitHub App)** as the source
+> 4. Authenticate with GitHub and select **GITHUB_OWNER/GITHUB_REPO**, then complete the wizard
 >
-> **Prod プロジェクト:**
-> 1. `https://console.cloud.google.com/cloud-build/triggers?project=PROD_PROJECT_ID` を開く
-> 2. **Connect Repository** をクリック
-> 3. ソースとして **GitHub (Cloud Build GitHub App)** を選択
-> 4. GitHub を認証し、**GITHUB_OWNER/GITHUB_REPO** を選択してウィザードを完了
+> **Prod project:**
+> 1. Open `https://console.cloud.google.com/cloud-build/triggers?project=PROD_PROJECT_ID`
+> 2. Click **Connect Repository**
+> 3. Select **GitHub (Cloud Build GitHub App)** as the source
+> 4. Authenticate with GitHub and select **GITHUB_OWNER/GITHUB_REPO**, then complete the wizard
 >
-> 両方の接続が完了したら教えてください。
-
-Note: if the GitHub App is already installed for that GitHub account from a previous project, step 4 may skip the authorization dialog and proceed directly to repository selection.
+> Note: use the **Triggers** page (1st gen), not the Repositories page (2nd gen). The "Connect Repository" button is only available on the Triggers page.
+>
+> If the GitHub App is already installed for your GitHub account from a previous project, step 4 may skip the authorization dialog and go directly to repository selection.
+>
+> Let me know when both connections are complete.
 
 Wait for the user to confirm both before proceeding.
 
@@ -420,15 +515,15 @@ If the trigger names differ from `backend-deploy` / `frontend-deploy`, use the a
 
 Tell the user:
 
-> dev プロジェクトのビルドが開始しました。
+> Dev builds have started.
 >
-> ビルド状況: `https://console.cloud.google.com/cloud-build/builds?project=DEV_PROJECT_ID`
+> Build status: `https://console.cloud.google.com/cloud-build/builds?project=DEV_PROJECT_ID`
 >
-> 2つのビルドが実行されます:
-> - `backend-deploy` → Cloud Run に `backend-app` をデプロイ
-> - `frontend-deploy` → Cloud Run に `frontend-app` をデプロイ
+> Two builds are running:
+> - `backend-deploy` → deploys `backend-app` to Cloud Run
+> - `frontend-deploy` → deploys `frontend-app` to Cloud Run
 >
-> 通常 5〜10 分かかります。両方が完了したら教えてください。
+> These typically take 5–10 minutes. Let me know when both succeed.
 
 Wait for the user to confirm both dev builds succeed before proceeding.
 
@@ -465,15 +560,15 @@ git push app init-config:main
 
 After apply, tell the user:
 
-> dev ドメインの DNS レコードを設定してください。Cloud Run のカスタムドメインはすべて `ghs.googlehosted.com.` への CNAME レコードです:
+> Please add the following DNS records for the dev domains. All Cloud Run custom domains use a CNAME pointing to `ghs.googlehosted.com.`:
 >
-> | ドメイン | タイプ | 値 |
+> | Domain | Type | Value |
 > |---|---|---|
 > | **DEV_FRONTEND_DOMAIN** | CNAME | `ghs.googlehosted.com.` |
 > | **DEV_BACKEND_DOMAIN** | CNAME | `ghs.googlehosted.com.` |
 >
-> DNS プロバイダにこれらの CNAME レコードを登録してください。反映には最大 1 時間かかる場合があります。
-> なお、Cloud Console (`https://console.cloud.google.com/run/domains?project=DEV_PROJECT_ID`) では SSL 証明書の発行状況を確認できます。
+> Add these CNAME records in your DNS provider. Propagation may take up to 1 hour.
+> You can monitor SSL certificate issuance at: `https://console.cloud.google.com/run/domains?project=DEV_PROJECT_ID`
 
 ---
 
@@ -501,9 +596,9 @@ git push app init-config:release
 
 Tell the user:
 
-> deployment リポジトリの `release` ブランチに push しました。
+> Pushed to the `release` branch of the deployment repository.
 >
-> ビルド状況: `https://console.cloud.google.com/cloud-build/builds?project=PROD_PROJECT_ID`
+> Build status: `https://console.cloud.google.com/cloud-build/builds?project=PROD_PROJECT_ID`
 
 Wait up to 30 seconds. If `backend-deploy` and `frontend-deploy` do **not** appear automatically, it means the pushed commit did not change any files under `backend/**/*` or `frontend/**/*` (e.g., the most recent commit was a Terraform-only change). In that case, run them manually:
 
@@ -512,11 +607,13 @@ gcloud builds triggers run backend-deploy --branch=release --project=PROD_PROJEC
 gcloud builds triggers run frontend-deploy --branch=release --project=PROD_PROJECT_ID
 ```
 
-> 2つのビルドが実行されます:
-> - `backend-deploy` → Cloud Run に `backend-app` をデプロイ (prod)
-> - `frontend-deploy` → Cloud Run に `frontend-app` をデプロイ (prod)
+Tell the user:
+
+> Two builds are running:
+> - `backend-deploy` → deploys `backend-app` to Cloud Run (prod)
+> - `frontend-deploy` → deploys `frontend-app` to Cloud Run (prod)
 >
-> 両方が完了したら教えてください。
+> Let me know when both succeed.
 
 Wait for the user to confirm both prod builds succeed.
 
@@ -551,15 +648,15 @@ git push app init-config:release
 
 After apply, tell the user:
 
-> prod ドメインの DNS レコードを設定してください。Cloud Run のカスタムドメインはすべて `ghs.googlehosted.com.` への CNAME レコードです:
+> Please add the following DNS records for the prod domains. All Cloud Run custom domains use a CNAME pointing to `ghs.googlehosted.com.`:
 >
-> | ドメイン | タイプ | 値 |
+> | Domain | Type | Value |
 > |---|---|---|
 > | **PROD_FRONTEND_DOMAIN** | CNAME | `ghs.googlehosted.com.` |
 > | **PROD_BACKEND_DOMAIN** | CNAME | `ghs.googlehosted.com.` |
 >
-> DNS プロバイダにこれらの CNAME レコードを登録してください。
-> なお、Cloud Console (`https://console.cloud.google.com/run/domains?project=PROD_PROJECT_ID`) では SSL 証明書の発行状況を確認できます。
+> Add these CNAME records in your DNS provider.
+> You can monitor SSL certificate issuance at: `https://console.cloud.google.com/run/domains?project=PROD_PROJECT_ID`
 
 ---
 
@@ -580,21 +677,20 @@ gcloud builds triggers list --project=PROD_PROJECT_ID
 
 Summarize the completed deployment:
 
-- **デプロイ先リポジトリ**: `https://github.com/GITHUB_OWNER/GITHUB_REPO`
-- **Dev 環境**: `https://DEV_FRONTEND_DOMAIN`
-  - deployment リポジトリの `main` への push で自動デプロイ (dev プロジェクト)
-- **Prod 環境**: `https://PROD_FRONTEND_DOMAIN`
-  - deployment リポジトリの `release` への push で自動デプロイ (prod プロジェクト)
-- **リリース方法**: `main` を `release` にマージして push → prod に自動デプロイ
-- **Dev ビルド監視**: `https://console.cloud.google.com/cloud-build/builds?project=DEV_PROJECT_ID`
-- **Prod ビルド監視**: `https://console.cloud.google.com/cloud-build/builds?project=PROD_PROJECT_ID`
+- **Deployment repository**: `https://github.com/GITHUB_OWNER/GITHUB_REPO`
+- **Dev environment**: `https://DEV_FRONTEND_DOMAIN`
+  - Auto-deploys on every push to `main` in the deployment repository
+- **Prod environment**: `https://PROD_FRONTEND_DOMAIN`
+  - Auto-deploys on every push to `release` in the deployment repository
+- **Release process**: merge `main` into `release` and push → auto-deploys to prod
+- **Dev build status**: `https://console.cloud.google.com/cloud-build/builds?project=DEV_PROJECT_ID`
+- **Prod build status**: `https://console.cloud.google.com/cloud-build/builds?project=PROD_PROJECT_ID`
 
 ---
 
 ## Error handling
 
-- `gcloud` permission error → remind user to run `gcloud auth login` and verify project permissions.
+- `gcloud` permission error → remind user to run `gcloud auth login` and `gcloud auth application-default login`, and verify project permissions.
 - `terraform apply` failure → show the full error and suggest fixes before retrying.
 - Cloud Build failure → link to the build log URL for diagnosis.
-- Resource already exists (bucket, SA) → skip creation, note it was already done.
-- Import already in state → skip import, continue.
+- Resource already exists (bucket, SA) → use `terraform import` to bring it under Terraform management before applying.

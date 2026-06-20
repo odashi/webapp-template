@@ -1,0 +1,16 @@
+steps:
+  - id: "terraform init"
+    name: "hashicorp/terraform:latest"
+    args: ["-chdir=${_CHDIR}", "init", "-no-color"]
+  - id: "terraform validate"
+    name: "hashicorp/terraform:latest"
+    args: ["-chdir=${_CHDIR}", "validate", "-no-color"]
+  - id: "terraform plan"
+    name: "hashicorp/terraform:latest"
+    args: ["-chdir=${_CHDIR}", "plan", "-no-color"]
+
+options:
+  logging: "CLOUD_LOGGING_ONLY"
+
+substitutions:
+  _CHDIR: ""

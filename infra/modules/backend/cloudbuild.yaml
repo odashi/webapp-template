@@ -1,0 +1,45 @@
+steps:
+  - id: "build_image"
+    name: "gcr.io/cloud-builders/docker:latest"
+    args:
+      - "build"
+      - "-t"
+      - "${_GAR_ROOT}/${_PREFIX}:${COMMIT_SHA}"
+      - "backend"
+
+  - id: "push_image"
+    name: "gcr.io/cloud-builders/docker:latest"
+    args:
+      - "push"
+      - "${_GAR_ROOT}/${_PREFIX}:${COMMIT_SHA}"
+
+  - id: "deploy_service"
+    name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    entrypoint: "gcloud"
+    args:
+      - "run"
+      - "deploy"
+      - "${_PREFIX}-app"
+      - "--allow-unauthenticated"
+      - "--concurrency=64"
+      - "--cpu=1"
+      - "--execution-environment=gen2"
+      - "--image=${_GAR_ROOT}/${_PREFIX}:${COMMIT_SHA}"
+      - "--max-instances=2"
+      - "--memory=256Mi"
+      - "--min-instances=0"
+      - "--port=8080"
+      - "--region=${_RUNNER_REGION}"
+      - "--service-account=${_RUNNER_SERVICE_ACCOUNT}"
+      - "--timeout=10"
+      - "--set-env-vars=CORS_ORIGIN=https://${_FRONTEND_DOMAIN}"
+
+options:
+  logging: "CLOUD_LOGGING_ONLY"
+
+substitutions:
+  _PREFIX: ""
+  _GAR_ROOT: ""
+  _FRONTEND_DOMAIN: ""
+  _RUNNER_REGION: ""
+  _RUNNER_SERVICE_ACCOUNT: ""

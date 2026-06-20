@@ -364,23 +364,27 @@ Confirm with the user before proceeding.
 
 ## Phase 7: Connect GitHub to Cloud Build (manual step — both projects)
 
-The deployment repository now exists on GitHub. Connect it to Cloud Build in both GCP projects.
+The Terraform modules use 1st gen `google_cloudbuild_trigger` resources with a `github` block. These require the **Cloud Build GitHub App** to be installed on the deployment repository in each GCP project.
 
 Tell the user:
 
-> Cloud Build の **両プロジェクト** が GitHub リポジトリ **GITHUB_OWNER/GITHUB_REPO** にアクセスできるよう接続してください。
+> Cloud Build の **両プロジェクト** に GitHub App を接続してください。
 >
 > **Dev プロジェクト:**
-> 1. `https://console.cloud.google.com/cloud-build/repositories/2nd-gen?project=DEV_PROJECT_ID` を開く
-> 2. **Connect repository** → **GitHub** を選択 → 必要に応じて認証
-> 3. **GITHUB_OWNER/GITHUB_REPO** を検索して選択 → ウィザードを完了
+> 1. `https://console.cloud.google.com/cloud-build/triggers?project=DEV_PROJECT_ID` を開く
+> 2. **Connect Repository** をクリック
+> 3. ソースとして **GitHub (Cloud Build GitHub App)** を選択
+> 4. GitHub を認証し、**GITHUB_OWNER/GITHUB_REPO** を選択してウィザードを完了
 >
 > **Prod プロジェクト:**
-> 1. `https://console.cloud.google.com/cloud-build/repositories/2nd-gen?project=PROD_PROJECT_ID` を開く
-> 2. **Connect repository** → **GitHub** を選択 → 必要に応じて認証
-> 3. **GITHUB_OWNER/GITHUB_REPO** を検索して選択 → ウィザードを完了
+> 1. `https://console.cloud.google.com/cloud-build/triggers?project=PROD_PROJECT_ID` を開く
+> 2. **Connect Repository** をクリック
+> 3. ソースとして **GitHub (Cloud Build GitHub App)** を選択
+> 4. GitHub を認証し、**GITHUB_OWNER/GITHUB_REPO** を選択してウィザードを完了
 >
 > 両方の接続が完了したら教えてください。
+
+Note: if the GitHub App is already installed for that GitHub account from a previous project, step 4 may skip the authorization dialog and proceed directly to repository selection.
 
 Wait for the user to confirm both before proceeding.
 

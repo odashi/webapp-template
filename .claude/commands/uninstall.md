@@ -195,23 +195,26 @@ The `|| true` handles the case where the service was never deployed or was alrea
 
 ### 4-2. Delete Artifact Registry repository
 
-The AR repository cannot be destroyed by Terraform if it contains images. Delete it via gcloud (which also removes all images), then remove it from Terraform state:
+The AR repository cannot be destroyed by Terraform if it contains images. Delete it via gcloud (which also removes all images), then remove the repository and its dependent IAM bindings from Terraform state:
 
 ```bash
 gcloud artifacts repositories delete images --location=REGION --project=DEV_PROJECT_ID --quiet 2>/dev/null || true
 ```
 
-Then remove from Terraform state so `terraform destroy` does not try to delete it again:
+Then remove from Terraform state so `terraform destroy` does not try to delete them again:
 
 ```bash
-cd infra/dev && terraform state rm module.common.google_artifact_registry_repository.images
+cd infra/dev && terraform state rm \
+  module.common.google_artifact_registry_repository.images \
+  module.frontend.google_artifact_registry_repository_iam_member.builder_artifact_writer \
+  module.backend.google_artifact_registry_repository_iam_member.builder_artifact_writer
 ```
 
-If the `terraform state rm` command fails because the resource is not in state (e.g., it was never created), that is fine — continue.
+If any `terraform state rm` entry fails because the resource is not in state (e.g., it was never created), that is fine — continue.
 
 ### 4-3. Migrate Terraform state from GCS to local
 
-The dev Terraform state is stored in the GCS bucket. We need to migrate it to local before destroying the bucket. Edit `infra/dev/main.tf` to comment out the `backend "gcs"` block:
+The dev Terraform state is stored in the GCS bucket. Migrate it to local so the bucket's contents become the local state file. Edit `infra/dev/main.tf` to comment out the `backend "gcs"` block:
 
 From:
 ```hcl
@@ -232,9 +235,18 @@ Then migrate state from GCS to local:
 cd infra/dev && terraform init -migrate-state
 ```
 
-Type `yes` when prompted. After this, the GCS bucket is empty and can be deleted by Terraform.
+Type `yes` when prompted.
 
-### 4-4. Destroy dev resources
+### 4-4. Delete GCS Terraform state bucket
+
+The GCS bucket may still contain objects after state migration (Terraform does not always clean up the remote state file). Delete the bucket and all its contents via gcloud, then remove it from Terraform state:
+
+```bash
+gcloud storage rm -r gs://DEV_PROJECT_ID-terraform/ 2>/dev/null || true
+cd infra/dev && terraform state rm module.terraform.google_storage_bucket.terraform
+```
+
+### 4-5. Destroy dev resources
 
 Run Terraform destroy for the dev project:
 
@@ -245,7 +257,6 @@ cd infra/dev && terraform destroy -auto-approve
 This will remove:
 - Cloud Build triggers
 - IAM service accounts and role bindings
-- GCS Terraform state bucket (now empty)
 - GCP API enablements
 
 Wait for completion. If any resource fails to destroy, note the error and continue — the remaining resources can be removed manually via the GCP console.
@@ -269,10 +280,13 @@ gcloud run services delete frontend-app --region=REGION --project=PROD_PROJECT_I
 gcloud artifacts repositories delete images --location=REGION --project=PROD_PROJECT_ID --quiet 2>/dev/null || true
 ```
 
-Remove from Terraform state:
+Remove the repository and its dependent IAM bindings from Terraform state:
 
 ```bash
-cd infra/prod && terraform state rm module.common.google_artifact_registry_repository.images
+cd infra/prod && terraform state rm \
+  module.common.google_artifact_registry_repository.images \
+  module.frontend.google_artifact_registry_repository_iam_member.builder_artifact_writer \
+  module.backend.google_artifact_registry_repository_iam_member.builder_artifact_writer
 ```
 
 ### 5-3. Migrate Terraform state from GCS to local
@@ -300,7 +314,14 @@ cd infra/prod && terraform init -migrate-state
 
 Type `yes` when prompted.
 
-### 5-4. Destroy prod resources
+### 5-4. Delete GCS Terraform state bucket
+
+```bash
+gcloud storage rm -r gs://PROD_PROJECT_ID-terraform/ 2>/dev/null || true
+cd infra/prod && terraform state rm module.terraform.google_storage_bucket.terraform
+```
+
+### 5-5. Destroy prod resources
 
 ```bash
 cd infra/prod && terraform destroy -auto-approve
@@ -334,5 +355,5 @@ Tell the user:
 
 - `gcloud` permission error → remind user to run `gcloud auth login` and `gcloud auth application-default login`.
 - `terraform destroy` fails on a specific resource → note the error, instruct the user to delete the resource manually via the GCP console, then remove it from Terraform state with `terraform state rm <resource_address>` and retry `terraform destroy`.
-- GCS bucket still has objects after state migration → use `gcloud storage rm -r gs://DEV_PROJECT_ID-terraform/` to empty the bucket, then retry `terraform destroy`.
+- GCS bucket still has objects after state migration → this is expected; Phase 4-4/5-4 handles it with `gcloud storage rm -r` followed by `terraform state rm`.
 - Terraform state is already local (GCS backend was already commented out) → skip the migration step and proceed directly to `terraform destroy`.

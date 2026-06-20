@@ -329,7 +329,88 @@ cd infra/dev && terraform destroy -auto-approve
 
 ---
 
-## Phase 6: Summary
+## Phase 6: Verify resource deletion
+
+After both teardowns, verify that all GCP resources have been removed from both projects. Run the checks below for prod first, then dev. Report all results to the user.
+
+### 6-1. Verify prod project
+
+Run each command and capture the output:
+
+**Cloud Run services:**
+```bash
+gcloud run services list --region=REGION --project=PROD_PROJECT_ID --format="table(metadata.name,status.url)"
+```
+
+**Cloud Build triggers:**
+```bash
+gcloud builds triggers list --project=PROD_PROJECT_ID --format="table(name,createTime)"
+```
+
+**Artifact Registry repositories:**
+```bash
+gcloud artifacts repositories list --location=REGION --project=PROD_PROJECT_ID --format="table(name,format)"
+```
+
+**IAM service accounts (custom — excludes default Google-managed accounts):**
+```bash
+gcloud iam service-accounts list --project=PROD_PROJECT_ID --format="table(email,displayName)" --filter="NOT email~'(developer\.gserviceaccount|appspot\.gserviceaccount|cloudservices\.gserviceaccount)'"
+```
+
+**GCS buckets:**
+```bash
+gcloud storage buckets list --project=PROD_PROJECT_ID --format="table(name,location)"
+```
+
+### 6-2. Verify dev project
+
+Repeat the same checks for the dev project:
+
+**Cloud Run services:**
+```bash
+gcloud run services list --region=REGION --project=DEV_PROJECT_ID --format="table(metadata.name,status.url)"
+```
+
+**Cloud Build triggers:**
+```bash
+gcloud builds triggers list --project=DEV_PROJECT_ID --format="table(name,createTime)"
+```
+
+**Artifact Registry repositories:**
+```bash
+gcloud artifacts repositories list --location=REGION --project=DEV_PROJECT_ID --format="table(name,format)"
+```
+
+**IAM service accounts (custom):**
+```bash
+gcloud iam service-accounts list --project=DEV_PROJECT_ID --format="table(email,displayName)" --filter="NOT email~'(developer\.gserviceaccount|appspot\.gserviceaccount|cloudservices\.gserviceaccount)'"
+```
+
+**GCS buckets:**
+```bash
+gcloud storage buckets list --project=DEV_PROJECT_ID --format="table(name,location)"
+```
+
+### 6-3. Report results
+
+After running all checks, report to the user:
+
+- If all commands returned **empty output**: tell the user all resources have been successfully removed.
+- If **any resources remain**: list them clearly by project and resource type, and provide the manual deletion commands:
+
+| Resource type | Deletion command |
+|---|---|
+| Cloud Run service | `gcloud run services delete NAME --region=REGION --project=PROJECT_ID --quiet` |
+| Cloud Build trigger | `gcloud builds triggers delete TRIGGER_ID --project=PROJECT_ID --quiet` |
+| Artifact Registry repo | `gcloud artifacts repositories delete NAME --location=REGION --project=PROJECT_ID --quiet` |
+| IAM service account | `gcloud iam service-accounts delete SA_EMAIL --quiet` |
+| GCS bucket | `gcloud storage rm -r gs://BUCKET_NAME/` |
+
+Tell the user that Terraform-unmanaged resources (e.g., Cloud Run services deployed by Cloud Build, or resources created manually) must be deleted via these gcloud commands; they will not be removed by `terraform destroy`.
+
+---
+
+## Phase 7: Summary
 
 Tell the user:
 

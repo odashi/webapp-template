@@ -12,31 +12,27 @@ locals {
     "run.googleapis.com",
   ]
 
-  # TODO: Replace with your dev GCP project values.
   project = {
-    id     = "my-dev-project-id"
-    number = "000000000000"
+    id     = "[[[dev.project_id]]]"
+    number = "[[[dev.project_number]]]"
   }
 
-  # TODO: Replace with your GCP region values.
   region = {
-    default         = "my-gcp-region"
-    storage_default = "MY-STORAGE-REGION"
+    default         = "[[[region.default]]]"
+    storage_default = "[[[region.storage]]]"
   }
 
-  # TODO: Replace with your GitHub repository.
   github_repository = {
-    owner = "my-github-owner"
-    name  = "my-repo-name"
+    owner = "[[[github.owner]]]"
+    name  = "[[[github.name]]]"
   }
 
   # Trunk: deploy dev on every push to main.
   branch = "main"
 
-  # TODO: Replace with your dev custom domains.
   domains = {
-    frontend = "dev.example.com"
-    backend  = "api-dev.example.com"
+    frontend = "[[[domains.dev.frontend]]]"
+    backend  = "[[[domains.dev.backend]]]"
   }
 
   # Set to true after Cloud Run services are deployed to enable domain mappings.

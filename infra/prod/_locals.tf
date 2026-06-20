@@ -12,31 +12,27 @@ locals {
     "run.googleapis.com",
   ]
 
-  # TODO: Replace with your prod GCP project values.
   project = {
-    id     = "my-prod-project-id"
-    number = "000000000000"
+    id     = "[[[prod.project_id]]]"
+    number = "[[[prod.project_number]]]"
   }
 
-  # TODO: Replace with your GCP region values.
   region = {
-    default         = "my-gcp-region"
-    storage_default = "MY-STORAGE-REGION"
+    default         = "[[[region.default]]]"
+    storage_default = "[[[region.storage]]]"
   }
 
-  # TODO: Replace with your GitHub repository.
   github_repository = {
-    owner = "my-github-owner"
-    name  = "my-repo-name"
+    owner = "[[[github.owner]]]"
+    name  = "[[[github.name]]]"
   }
 
   # Release: deploy prod on every push to release.
   branch = "release"
 
-  # TODO: Replace with your prod custom domains.
   domains = {
-    frontend = "app.example.com"
-    backend  = "api.example.com"
+    frontend = "[[[domains.prod.frontend]]]"
+    backend  = "[[[domains.prod.backend]]]"
   }
 
   # Set to true after Cloud Run services are deployed to enable domain mappings.

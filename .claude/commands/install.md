@@ -120,23 +120,25 @@ If the file does not exist, tell the user:
 
 > `deploy.config.json` was not found at the repository root. Please create it using the placeholder values in the existing template as a guide.
 
-If the file exists, read it and validate that **none of the following placeholder values remain**:
+If the file exists, read it and validate that **no value in the file contains `[[[`** — any occurrence of `[[[` means that field has not been filled in yet.
 
-- `my-gcp-region`
-- `MY-STORAGE-REGION`
-- `my-dev-project-id`
-- `my-prod-project-id`
-- `000000000000`
-- `my-github-owner`
-- `my-repo-name`
-- `dev.example.com`
-- `api-dev.example.com`
-- `app.example.com`
-- `api.example.com`
+Check each field and list any that still contain `[[[`. If any are found, tell the user:
 
-If any placeholder remains, show the user which fields still need to be filled and tell them:
+> Please edit `deploy.config.json` and replace all `[[[...]]]` placeholders with your actual values, then run the wizard again.
 
-> Please edit `deploy.config.json` and replace all placeholder values with your actual values, then run the wizard again.
+The fields to fill in are:
+- `region.default` — GCP region (e.g. `asia-northeast1`)
+- `region.storage` — GCS storage region (e.g. `ASIA-NORTHEAST1`)
+- `dev.project_id` — dev GCP project ID
+- `dev.project_number` — dev GCP project number (12-digit)
+- `prod.project_id` — prod GCP project ID
+- `prod.project_number` — prod GCP project number (12-digit)
+- `github.owner` — GitHub username or organization
+- `github.name` — deployment repository name (will be created in Phase 6)
+- `domains.dev.frontend` — dev frontend custom domain
+- `domains.dev.backend` — dev backend custom domain
+- `domains.prod.frontend` — prod frontend custom domain
+- `domains.prod.backend` — prod backend custom domain
 
 Do not proceed until the file is valid. If the user says they have updated it, re-read and re-validate.
 
@@ -192,33 +194,33 @@ When the user requests a fix to the wizard or template files (not deployment con
 
 ## Phase 2: Fill in configuration placeholders
 
-Using the values read from `deploy.config.json`, edit the Terraform files to replace all placeholders.
+Using the values read from `deploy.config.json`, edit the Terraform files to replace all `[[[...]]]` placeholders. Each placeholder name matches the JSON path of the corresponding field in `deploy.config.json`.
 
 Edit `infra/dev/_locals.tf`:
-- `my-gcp-region` → `REGION`
-- `MY-STORAGE-REGION` → `STORAGE_REGION`
-- `my-dev-project-id` → `DEV_PROJECT_ID`
-- `000000000000` → `DEV_PROJECT_NUMBER`
-- `my-github-owner` → `GITHUB_OWNER`
-- `my-repo-name` → `GITHUB_REPO`
-- `dev.example.com` → `DEV_FRONTEND_DOMAIN`
-- `api-dev.example.com` → `DEV_BACKEND_DOMAIN`
+- `[[[dev.project_id]]]` → `DEV_PROJECT_ID`
+- `[[[dev.project_number]]]` → `DEV_PROJECT_NUMBER`
+- `[[[region.default]]]` → `REGION`
+- `[[[region.storage]]]` → `STORAGE_REGION`
+- `[[[github.owner]]]` → `GITHUB_OWNER`
+- `[[[github.name]]]` → `GITHUB_REPO`
+- `[[[domains.dev.frontend]]]` → `DEV_FRONTEND_DOMAIN`
+- `[[[domains.dev.backend]]]` → `DEV_BACKEND_DOMAIN`
 
 Edit `infra/dev/main.tf`:
-- `my-dev-project-id-terraform` → `DEV_PROJECT_ID-terraform`
+- `[[[dev.project_id]]]-terraform` → `DEV_PROJECT_ID-terraform`
 
 Edit `infra/prod/_locals.tf`:
-- `my-gcp-region` → `REGION`
-- `MY-STORAGE-REGION` → `STORAGE_REGION`
-- `my-prod-project-id` → `PROD_PROJECT_ID`
-- `000000000000` → `PROD_PROJECT_NUMBER`
-- `my-github-owner` → `GITHUB_OWNER`
-- `my-repo-name` → `GITHUB_REPO`
-- `app.example.com` → `PROD_FRONTEND_DOMAIN`
-- `api.example.com` → `PROD_BACKEND_DOMAIN`
+- `[[[prod.project_id]]]` → `PROD_PROJECT_ID`
+- `[[[prod.project_number]]]` → `PROD_PROJECT_NUMBER`
+- `[[[region.default]]]` → `REGION`
+- `[[[region.storage]]]` → `STORAGE_REGION`
+- `[[[github.owner]]]` → `GITHUB_OWNER`
+- `[[[github.name]]]` → `GITHUB_REPO`
+- `[[[domains.prod.frontend]]]` → `PROD_FRONTEND_DOMAIN`
+- `[[[domains.prod.backend]]]` → `PROD_BACKEND_DOMAIN`
 
 Edit `infra/prod/main.tf`:
-- `my-prod-project-id-terraform` → `PROD_PROJECT_ID-terraform`
+- `[[[prod.project_id]]]-terraform` → `PROD_PROJECT_ID-terraform`
 
 After all edits, show the user a brief summary of every file changed. Ask them to confirm before proceeding.
 

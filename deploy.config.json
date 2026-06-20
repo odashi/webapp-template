@@ -1,28 +1,28 @@
 {
   "region": {
-    "default": "asia-northeast1",
-    "storage": "ASIA-NORTHEAST1"
+    "default": "[[[region.default]]]",
+    "storage": "[[[region.storage]]]"
   },
   "dev": {
-    "project_id": "my-dev-project-id",
-    "project_number": "000000000000"
+    "project_id": "[[[dev.project_id]]]",
+    "project_number": "[[[dev.project_number]]]"
   },
   "prod": {
-    "project_id": "my-prod-project-id",
-    "project_number": "000000000000"
+    "project_id": "[[[prod.project_id]]]",
+    "project_number": "[[[prod.project_number]]]"
   },
   "github": {
-    "owner": "my-github-owner",
-    "name": "my-repo-name"
+    "owner": "[[[github.owner]]]",
+    "name": "[[[github.name]]]"
   },
   "domains": {
     "dev": {
-      "frontend": "dev.example.com",
-      "backend": "api-dev.example.com"
+      "frontend": "[[[domains.dev.frontend]]]",
+      "backend": "[[[domains.dev.backend]]]"
     },
     "prod": {
-      "frontend": "app.example.com",
-      "backend": "api.example.com"
+      "frontend": "[[[domains.prod.frontend]]]",
+      "backend": "[[[domains.prod.backend]]]"
     }
   }
 }

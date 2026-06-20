@@ -2,7 +2,7 @@ terraform {
   # Uncomment after the first `terraform apply` has created the GCS bucket,
   # then run `terraform init -migrate-state` to move state to GCS.
   # backend "gcs" {
-  #   bucket = "my-prod-project-id-terraform"
+  #   bucket = "[[[prod.project_id]]]-terraform"
   # }
 
   required_providers {

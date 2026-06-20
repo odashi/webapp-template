@@ -1,4 +1,8 @@
 {
+  "region": {
+    "default": "asia-northeast1",
+    "storage": "ASIA-NORTHEAST1"
+  },
   "dev": {
     "project_id": "my-dev-project-id",
     "project_number": "000000000000"

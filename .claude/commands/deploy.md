@@ -29,6 +29,8 @@ If the file does not exist, tell the user:
 
 If the file exists, read it and validate that **none of the following placeholder values remain**:
 
+- `my-gcp-region`
+- `MY-STORAGE-REGION`
 - `my-dev-project-id`
 - `my-prod-project-id`
 - `000000000000`
@@ -47,6 +49,8 @@ Do not proceed until the file is valid. If the user says they have updated it, r
 
 Once valid, extract and store the following variables for use throughout the wizard:
 
+- `REGION` = `.region.default`
+- `STORAGE_REGION` = `.region.storage`
 - `DEV_PROJECT_ID` = `.dev.project_id`
 - `DEV_PROJECT_NUMBER` = `.dev.project_number`
 - `PROD_PROJECT_ID` = `.prod.project_id`
@@ -98,6 +102,8 @@ When the user requests a fix to the wizard or template files (not deployment con
 Using the values read from `deploy.config.json`, edit the Terraform files to replace all placeholders.
 
 Edit `infra/dev/_locals.tf`:
+- `my-gcp-region` → `REGION`
+- `MY-STORAGE-REGION` → `STORAGE_REGION`
 - `my-dev-project-id` → `DEV_PROJECT_ID`
 - `000000000000` → `DEV_PROJECT_NUMBER`
 - `my-github-owner` → `GITHUB_OWNER`
@@ -109,6 +115,8 @@ Edit `infra/dev/main.tf`:
 - `my-dev-project-id-terraform` → `DEV_PROJECT_ID-terraform`
 
 Edit `infra/prod/_locals.tf`:
+- `my-gcp-region` → `REGION`
+- `MY-STORAGE-REGION` → `STORAGE_REGION`
 - `my-prod-project-id` → `PROD_PROJECT_ID`
 - `000000000000` → `PROD_PROJECT_NUMBER`
 - `my-github-owner` → `GITHUB_OWNER`
@@ -156,7 +164,7 @@ If not found:
 ```bash
 gcloud storage buckets create gs://DEV_PROJECT_ID-terraform \
   --project=DEV_PROJECT_ID \
-  --location=ASIA-NORTHEAST1 \
+  --location=STORAGE_REGION \
   --uniform-bucket-level-access
 ```
 
@@ -220,7 +228,7 @@ If not found:
 ```bash
 gcloud storage buckets create gs://PROD_PROJECT_ID-terraform \
   --project=PROD_PROJECT_ID \
-  --location=ASIA-NORTHEAST1 \
+  --location=STORAGE_REGION \
   --uniform-bucket-level-access
 ```
 
@@ -449,7 +457,7 @@ After apply, tell the user:
 ## Phase 12: Verify dev environment
 
 ```bash
-gcloud run services list --region=asia-northeast1 --project=DEV_PROJECT_ID
+gcloud run services list --region=REGION --project=DEV_PROJECT_ID
 ```
 
 Confirm `backend-app` and `frontend-app` are `READY`.
@@ -503,7 +511,7 @@ After apply, tell the user:
 ## Phase 15: Verify prod environment and summarize
 
 ```bash
-gcloud run services list --region=asia-northeast1 --project=PROD_PROJECT_ID
+gcloud run services list --region=REGION --project=PROD_PROJECT_ID
 ```
 
 Confirm `backend-app` and `frontend-app` are `READY`.

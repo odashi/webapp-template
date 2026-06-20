@@ -18,9 +18,10 @@ locals {
     number = "000000000000"
   }
 
+  # TODO: Replace with your GCP region values.
   region = {
-    default         = "asia-northeast1"
-    storage_default = "ASIA-NORTHEAST1"
+    default         = "my-gcp-region"
+    storage_default = "MY-STORAGE-REGION"
   }
 
   # TODO: Replace with your GitHub repository.

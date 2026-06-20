@@ -283,35 +283,106 @@ If git already exists, confirm the current branch is `init-config` (Phase 1b sho
 
 ---
 
-## Phase 6: Connect GitHub to Cloud Build (manual step — both projects)
+## Phase 6: Create deployment repository and push
 
-Tell the user:
+This phase creates the GitHub deployment repository and pushes the configured code to it. The deployment repository (`app` remote) is separate from the template repository (`origin`) and receives all future deployment pushes. The `origin` remote (webapp-template) always retains placeholder values on `main`.
 
-> Cloud Build in **both** projects needs access to your GitHub repository. Please complete this for each project:
->
-> **Dev project:**
-> 1. Open: `https://console.cloud.google.com/cloud-build/repositories/2nd-gen?project=DEV_PROJECT_ID`
-> 2. Click **Connect repository** → select **GitHub** → authorize if prompted.
-> 3. Find and select **OWNER/REPO_NAME** → complete the wizard.
->
-> **Prod project:**
-> 1. Open: `https://console.cloud.google.com/cloud-build/repositories/2nd-gen?project=PROD_PROJECT_ID`
-> 2. Click **Connect repository** → select **GitHub** → authorize if prompted.
-> 3. Find and select **OWNER/REPO_NAME** → complete the wizard.
->
-> Let me know when both connections are confirmed.
+### 6-1. Generate frontend package lock file
 
-Wait for the user to confirm both before proceeding.
-
----
-
-## Phase 7: Generate frontend package lock file
-
-Required for Docker's `npm ci`:
+Required for Docker's `npm ci` during Cloud Build:
 
 ```bash
 cd frontend && npm install
 ```
+
+### 6-2. Commit all changes on init-config
+
+```bash
+git add -A
+git status
+```
+
+If there are uncommitted changes:
+
+```bash
+git commit -m "Initial deployment configuration"
+```
+
+### 6-3. Create GitHub deployment repository
+
+Check if `gh` CLI is available:
+
+```bash
+gh --version 2>&1
+```
+
+If available, create the repository (adjust `--private`/`--public` as preferred):
+
+```bash
+gh repo create GITHUB_OWNER/GITHUB_REPO --private --description "Web application"
+```
+
+If `gh` is not available or the user prefers to create it manually, tell them:
+
+> GitHub に新しいリポジトリを作成してください:
+> - URL: `https://github.com/new`
+> - Owner: **GITHUB_OWNER**
+> - Repository name: **GITHUB_REPO**
+> - **README・.gitignore・ライセンスによる初期化は行わないでください**
+>
+> 作成が完了したら教えてください。
+
+Wait for the user to confirm the repository exists before continuing.
+
+### 6-4. Add `app` remote
+
+Check if `app` remote already exists:
+
+```bash
+git remote get-url app 2>/dev/null && echo "exists" || echo "not_found"
+```
+
+If not found:
+
+```bash
+git remote add app git@github.com:GITHUB_OWNER/GITHUB_REPO.git
+```
+
+### 6-5. Push to deployment repository
+
+Push the `init-config` branch (which contains real configuration values) as `main` to the deployment repository:
+
+```bash
+git push app init-config:main
+```
+
+This is the only push to the deployment repo `main` branch that originates from `init-config`. From here on, everyday development happens in the deployment repository itself, not the template.
+
+Confirm with the user before proceeding.
+
+---
+
+## Phase 7: Connect GitHub to Cloud Build (manual step — both projects)
+
+The deployment repository now exists on GitHub. Connect it to Cloud Build in both GCP projects.
+
+Tell the user:
+
+> Cloud Build の **両プロジェクト** が GitHub リポジトリ **GITHUB_OWNER/GITHUB_REPO** にアクセスできるよう接続してください。
+>
+> **Dev プロジェクト:**
+> 1. `https://console.cloud.google.com/cloud-build/repositories/2nd-gen?project=DEV_PROJECT_ID` を開く
+> 2. **Connect repository** → **GitHub** を選択 → 必要に応じて認証
+> 3. **GITHUB_OWNER/GITHUB_REPO** を検索して選択 → ウィザードを完了
+>
+> **Prod プロジェクト:**
+> 1. `https://console.cloud.google.com/cloud-build/repositories/2nd-gen?project=PROD_PROJECT_ID` を開く
+> 2. **Connect repository** → **GitHub** を選択 → 必要に応じて認証
+> 3. **GITHUB_OWNER/GITHUB_REPO** を検索して選択 → ウィザードを完了
+>
+> 両方の接続が完了したら教えてください。
+
+Wait for the user to confirm both before proceeding.
 
 ---
 
@@ -339,7 +410,7 @@ cd infra/dev && terraform import \
   projects/DEV_PROJECT_ID/serviceAccounts/terraform@DEV_PROJECT_ID.iam.gserviceaccount.com
 ```
 
-If an import fails because the resource was already imported (e.g. on a retry), that is fine — continue.
+If an import fails because the resource was already imported (e.g. on a retry), continue.
 
 ### 8-3. Plan and apply
 
@@ -358,8 +429,6 @@ Wait for completion. Report any errors.
 ---
 
 ## Phase 9: Run Terraform for prod project
-
-Repeat Phase 8 for the prod project.
 
 ### 9-1. Initialize
 
@@ -387,7 +456,7 @@ cd infra/prod && terraform import \
 cd infra/prod && terraform plan
 ```
 
-Show the user what will be created. Ask for confirmation, then:
+Show what will be created. Ask for confirmation, then:
 
 ```bash
 cd infra/prod && terraform apply -auto-approve
@@ -395,50 +464,44 @@ cd infra/prod && terraform apply -auto-approve
 
 ---
 
-## Phase 10: Merge init-config to main and push — deploy dev environment
+## Phase 10: Trigger initial dev deployment
 
-All configuration is ready on `init-config`. Now merge it into `main` and push to trigger the dev Cloud Build.
+Terraform created the Cloud Build triggers in the dev project. Because the push to `main` happened in Phase 6 — before the triggers existed — the push did not fire any builds. Run the service triggers manually for the first deployment.
 
-### 10-1. Commit remaining changes on init-config
-
-Make sure all changes are committed on `init-config`:
+List triggers to find their exact names:
 
 ```bash
-git add -A
-git status
+gcloud builds triggers list --project=DEV_PROJECT_ID --format="table(name)"
 ```
 
-If there are uncommitted changes:
+Run both service deploy triggers against the `main` branch:
 
 ```bash
-git commit -m "Initial deployment configuration"
+gcloud builds triggers run backend-deploy --branch=main --project=DEV_PROJECT_ID
+gcloud builds triggers run frontend-deploy --branch=main --project=DEV_PROJECT_ID
 ```
 
-### 10-2. Merge into main and push
-
-```bash
-git checkout main
-git merge --no-ff init-config -m "Merge init-config: initial deployment configuration"
-git push origin main
-```
+If the trigger names differ from `backend-deploy` / `frontend-deploy`, use the actual names shown above.
 
 Tell the user:
 
-> `main` を push しました。Cloud Build が **dev プロジェクト** にデプロイを開始します。
+> dev プロジェクトのビルドが開始しました。
 >
-> Monitor at: `https://console.cloud.google.com/cloud-build/builds?project=DEV_PROJECT_ID`
+> ビルド状況: `https://console.cloud.google.com/cloud-build/builds?project=DEV_PROJECT_ID`
 >
-> Two builds will run:
-> - `backend-deploy` → deploys `backend-app` to Cloud Run (dev)
-> - `frontend-deploy` → deploys `frontend-app` to Cloud Run (dev)
+> 2つのビルドが実行されます:
+> - `backend-deploy` → Cloud Run に `backend-app` をデプロイ
+> - `frontend-deploy` → Cloud Run に `frontend-app` をデプロイ
 >
-> This typically takes 5–10 minutes.
+> 通常 5〜10 分かかります。両方が完了したら教えてください。
 
-Ask the user to confirm when both dev builds succeed before proceeding.
+Wait for the user to confirm both dev builds succeed before proceeding.
 
 ---
 
 ## Phase 11: Apply dev domain mappings
+
+After the Cloud Run services are deployed, run Terraform again to apply the domain mappings (which depend on the services existing):
 
 ```bash
 cd infra/dev && terraform apply -auto-approve
@@ -446,11 +509,11 @@ cd infra/dev && terraform apply -auto-approve
 
 After apply, tell the user:
 
-> Add DNS records for the dev domains:
+> dev ドメインの DNS レコードを設定してください:
 >
-> 1. Open: `https://console.cloud.google.com/run/domains?project=DEV_PROJECT_ID`
-> 2. Note the DNS records for **DEV_FRONTEND_DOMAIN** and **DEV_BACKEND_DOMAIN**.
-> 3. Add them at your DNS provider. Propagation typically completes within an hour.
+> 1. `https://console.cloud.google.com/run/domains?project=DEV_PROJECT_ID` を開く
+> 2. **DEV_FRONTEND_DOMAIN** と **DEV_BACKEND_DOMAIN** の DNS レコードを確認
+> 3. DNS プロバイダに登録 (反映には最大 1 時間かかる場合があります)
 
 ---
 
@@ -464,31 +527,31 @@ Confirm `backend-app` and `frontend-app` are `READY`.
 
 Ask the user to open the dev frontend URL and confirm it loads. The backend health check at `https://DEV_BACKEND_DOMAIN/health` should return `{"status":"ok"}`.
 
-Once the user confirms dev is working, proceed to deploy prod.
+Once the user confirms dev is working, proceed to prod.
 
 ---
 
 ## Phase 13: Push to `release` — deploy prod environment
 
-Create the `release` branch from `main` and push it. Cloud Build in the prod project will fire.
+Push the `init-config` branch as the `release` branch to the deployment repository. The prod project's Cloud Build triggers (created in Phase 9) will fire automatically.
 
 ```bash
-git checkout -b release
-git push -u origin release
-git checkout main
+git push app init-config:release
 ```
 
 Tell the user:
 
-> The `release` branch is on GitHub. Cloud Build in the **prod project** is deploying.
+> deployment リポジトリの `release` ブランチに push しました。prod プロジェクトの Cloud Build が自動的に起動します。
 >
-> Monitor at: `https://console.cloud.google.com/cloud-build/builds?project=PROD_PROJECT_ID`
+> ビルド状況: `https://console.cloud.google.com/cloud-build/builds?project=PROD_PROJECT_ID`
 >
-> Two builds will run:
-> - `backend-deploy` → deploys `backend-app` to Cloud Run (prod)
-> - `frontend-deploy` → deploys `frontend-app` to Cloud Run (prod)
+> 2つのビルドが実行されます:
+> - `backend-deploy` → Cloud Run に `backend-app` をデプロイ (prod)
+> - `frontend-deploy` → Cloud Run に `frontend-app` をデプロイ (prod)
+>
+> 両方が完了したら教えてください。
 
-Ask the user to confirm when both prod builds succeed.
+Wait for the user to confirm both prod builds succeed.
 
 ---
 
@@ -500,11 +563,11 @@ cd infra/prod && terraform apply -auto-approve
 
 After apply, tell the user:
 
-> Add DNS records for the prod domains:
+> prod ドメインの DNS レコードを設定してください:
 >
-> 1. Open: `https://console.cloud.google.com/run/domains?project=PROD_PROJECT_ID`
-> 2. Note the DNS records for **PROD_FRONTEND_DOMAIN** and **PROD_BACKEND_DOMAIN**.
-> 3. Add them at your DNS provider.
+> 1. `https://console.cloud.google.com/run/domains?project=PROD_PROJECT_ID` を開く
+> 2. **PROD_FRONTEND_DOMAIN** と **PROD_BACKEND_DOMAIN** の DNS レコードを確認
+> 3. DNS プロバイダに登録
 
 ---
 
@@ -525,15 +588,14 @@ gcloud builds triggers list --project=PROD_PROJECT_ID
 
 Summarize the completed deployment:
 
-- **Dev environment**: DEV_FRONTEND_DOMAIN
-  - Deploys automatically on push to `main` (dev project)
-  - Terraform CI: plan on PR to `main`, apply on push to `main`
-- **Prod environment**: PROD_FRONTEND_DOMAIN
-  - Deploys automatically on push to `release` (prod project)
-  - Terraform CI: plan on PR to `release`, apply on push to `release`
-- **How to release**: merge `main` into `release` and push → prod deploys automatically
-- **Monitor dev builds**: `https://console.cloud.google.com/cloud-build/builds?project=DEV_PROJECT_ID`
-- **Monitor prod builds**: `https://console.cloud.google.com/cloud-build/builds?project=PROD_PROJECT_ID`
+- **デプロイ先リポジトリ**: `https://github.com/GITHUB_OWNER/GITHUB_REPO`
+- **Dev 環境**: `https://DEV_FRONTEND_DOMAIN`
+  - deployment リポジトリの `main` への push で自動デプロイ (dev プロジェクト)
+- **Prod 環境**: `https://PROD_FRONTEND_DOMAIN`
+  - deployment リポジトリの `release` への push で自動デプロイ (prod プロジェクト)
+- **リリース方法**: `main` を `release` にマージして push → prod に自動デプロイ
+- **Dev ビルド監視**: `https://console.cloud.google.com/cloud-build/builds?project=DEV_PROJECT_ID`
+- **Prod ビルド監視**: `https://console.cloud.google.com/cloud-build/builds?project=PROD_PROJECT_ID`
 
 ---
 

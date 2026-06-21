@@ -1,7 +1,4 @@
 {
-  "iap": {
-    "support_email": "[[[iap.support_email]]]"
-  },
   "region": {
     "default": "[[[region.default]]]",
     "storage": "[[[region.storage]]]"

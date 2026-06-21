@@ -43,7 +43,6 @@ locals {
   # Add members to iap_allowed_members to grant access before public launch.
   # Set enable_iap = false to open prod to the public (removes authentication entirely).
   enable_iap          = true
-  iap_support_email   = "[[[iap.support_email]]]"
   iap_allowed_members = [
     # Add members here to grant access before public launch:
     # "user:alice@example.com",

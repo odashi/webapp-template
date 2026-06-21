@@ -51,8 +51,8 @@ resource "google_compute_backend_service" "frontend" {
   dynamic "iap" {
     for_each = var.enable_iap ? [1] : []
     content {
-      oauth2_client_id     = google_iap_client.default[0].client_id
-      oauth2_client_secret = google_iap_client.default[0].secret
+      oauth2_client_id     = var.oauth2_client_id
+      oauth2_client_secret = var.oauth2_client_secret
     }
   }
 }
@@ -70,8 +70,8 @@ resource "google_compute_backend_service" "backend_api" {
   dynamic "iap" {
     for_each = var.enable_iap ? [1] : []
     content {
-      oauth2_client_id     = google_iap_client.default[0].client_id
-      oauth2_client_secret = google_iap_client.default[0].secret
+      oauth2_client_id     = var.oauth2_client_id
+      oauth2_client_secret = var.oauth2_client_secret
     }
   }
 }

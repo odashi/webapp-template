@@ -609,7 +609,21 @@ gcloud secrets versions access latest \
 
 Confirm that output begins with the first 8 characters of the Client ID (not an error). If the command fails, check that the secret version was added correctly.
 
-**Log entry:** Append whether the OAuth client was created, that the secret was stored (do NOT log the credential values), and whether the verification check passed.
+#### 8-5-4. Re-apply Terraform to configure IAP with real credentials
+
+Now that the credentials are stored in Secret Manager, re-run `terraform apply` so IAP is configured with the actual OAuth client (the first apply in Phase 8-2 provisioned IAP with empty credentials):
+
+```bash
+CLIENT_ID=$(gcloud secrets versions access latest \
+  --secret=oauth2-client-id --project=DEV_PROJECT_ID)
+CLIENT_SECRET=$(gcloud secrets versions access latest \
+  --secret=oauth2-client-secret --project=DEV_PROJECT_ID)
+cd infra/dev && terraform apply -auto-approve \
+  -var="oauth2_client_id=${CLIENT_ID}" \
+  -var="oauth2_client_secret=${CLIENT_SECRET}"
+```
+
+**Log entry:** Append whether the OAuth client was created, that the secret was stored (do NOT log the credential values), and whether the verification check and re-apply passed.
 
 ---
 
@@ -741,7 +755,19 @@ gcloud secrets versions access latest \
 
 Confirm that the output begins with the first 8 characters of the prod Client ID.
 
-**Log entry:** Append whether the OAuth client was created, that the secret was stored (do NOT log the credential values), and whether the verification check passed.
+#### 9-5-4. Re-apply Terraform to configure IAP with real credentials
+
+```bash
+CLIENT_ID=$(gcloud secrets versions access latest \
+  --secret=oauth2-client-id --project=PROD_PROJECT_ID)
+CLIENT_SECRET=$(gcloud secrets versions access latest \
+  --secret=oauth2-client-secret --project=PROD_PROJECT_ID)
+cd infra/prod && terraform apply -auto-approve \
+  -var="oauth2_client_id=${CLIENT_ID}" \
+  -var="oauth2_client_secret=${CLIENT_SECRET}"
+```
+
+**Log entry:** Append whether the OAuth client was created, that the secret was stored (do NOT log the credential values), and whether the verification check and re-apply passed.
 
 ---
 

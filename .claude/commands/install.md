@@ -579,7 +579,7 @@ Tell the user:
 > 2. Click **Create Credentials → OAuth client ID**
 > 3. Set **Application type** to **Web application**
 > 4. Set **Name** to `IAP` (or any name)
-> 5. Click **Create**
+> 5. Click **Create** — do **not** add any redirect URIs manually; IAP handles the redirect URI (`/_gcp_iap/callback`) automatically
 > 6. Copy the **Client ID** and **Client secret** — you will need them in the next step
 >
 > Note: If prompted to configure the OAuth consent screen first, set it to **Internal** type with your support email, then return to Credentials to create the client.
@@ -715,7 +715,7 @@ Tell the user:
 > 2. Click **Create Credentials → OAuth client ID**
 > 3. Set **Application type** to **Web application**
 > 4. Set **Name** to `IAP`
-> 5. Click **Create**
+> 5. Click **Create** — do **not** add redirect URIs manually; IAP handles `/_gcp_iap/callback` automatically
 > 6. Copy the **Client ID** and **Client secret**
 
 Wait for the user to confirm they have the prod Client ID and Client secret.

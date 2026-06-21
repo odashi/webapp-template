@@ -527,6 +527,41 @@ git commit -m "Enable GCS backend for dev Terraform state"
 
 ---
 
+### 8-5. Configure dev DNS
+
+SSL certificate provisioning begins once the DNS A record resolves — configure it now so provisioning runs in the background while the remaining phases complete.
+
+Get the load balancer IP address:
+
+```bash
+cd infra/dev && terraform output -raw lb_ip_address
+```
+
+Tell the user:
+
+> Please add the following DNS A record now to start SSL certificate provisioning:
+>
+> | Domain | Type | Value |
+> |---|---|---|
+> | **DEV_FRONTEND_DOMAIN** | A | `<lb_ip_address>` |
+>
+> The HTTPS load balancer routes traffic as follows:
+> - `https://DEV_FRONTEND_DOMAIN/` → frontend
+> - `https://DEV_FRONTEND_DOMAIN/api/` → backend
+>
+> No separate DNS record is needed for the backend.
+>
+> SSL certificate provisioning is automatic and may take **15–60 minutes** after DNS propagates. You can monitor status at:
+> `https://console.cloud.google.com/net-services/loadbalancing/list/loadBalancers?project=DEV_PROJECT_ID`
+>
+> There is no need to wait for SSL before continuing — proceed to Phase 9 now.
+
+Wait for the user to confirm the DNS record has been added, then continue.
+
+**Log entry:** Append the lb_ip_address output and the DNS record the user needs to create.
+
+---
+
 ## Phase 9: Run Terraform for prod project
 
 ### 9-1. Initialize (local state)
@@ -577,6 +612,43 @@ This push will trigger the dev Terraform CI (no-op since state is up to date).
 
 ---
 
+### 9-5. Configure prod DNS
+
+Configure prod DNS now so SSL provisioning starts while Cloud Build deploys are in progress.
+
+Get the load balancer IP address:
+
+```bash
+cd infra/prod && terraform output -raw lb_ip_address
+```
+
+Tell the user:
+
+> Please add the following DNS A record now to start SSL certificate provisioning:
+>
+> | Domain | Type | Value |
+> |---|---|---|
+> | **PROD_FRONTEND_DOMAIN** | A | `<lb_ip_address>` |
+>
+> The HTTPS load balancer routes traffic as follows:
+> - `https://PROD_FRONTEND_DOMAIN/` → frontend
+> - `https://PROD_FRONTEND_DOMAIN/api/` → backend
+>
+> No separate DNS record is needed for the backend.
+>
+> **Note:** Prod IAP is enabled with an empty `iap_allowed_members` list, so the environment is inaccessible even after SSL is active. Add email addresses to `iap_allowed_members` in `infra/prod/_locals.tf` and run `terraform apply` to grant access.
+>
+> SSL certificate provisioning may take **15–60 minutes** after DNS propagates. Monitor status at:
+> `https://console.cloud.google.com/net-services/loadbalancing/list/loadBalancers?project=PROD_PROJECT_ID`
+>
+> There is no need to wait for SSL before continuing — proceed to Phase 10 now.
+
+Wait for the user to confirm the DNS record has been added, then continue.
+
+**Log entry:** Append the lb_ip_address output and the DNS record the user needs to create.
+
+---
+
 ## Phase 10: Trigger initial dev deployment
 
 Terraform created the Cloud Build triggers in the dev project. Because the push to `main` happened in Phase 6 — before the triggers existed — the push did not fire any builds. Run the service triggers manually for the first deployment.
@@ -616,36 +688,21 @@ Note: Going forward, pushes to `main` that include changes under `backend/**/*` 
 
 ---
 
-## Phase 11: Configure dev DNS
+## Phase 11: Verify dev SSL certificate
 
-The HTTPS load balancer and its SSL certificate were provisioned in Phase 8. Get the static IP:
-
-```bash
-cd infra/dev && terraform output -raw lb_ip_address
-```
+Dev DNS was configured in Phase 8-5. Check whether SSL certificate provisioning has completed:
 
 Tell the user:
 
-> Please add the following DNS record for the dev frontend domain:
+> Dev DNS was configured in Phase 8-5. Check SSL certificate status at:
+> `https://console.cloud.google.com/net-services/loadbalancing/list/loadBalancers?project=DEV_PROJECT_ID`
 >
-> | Domain | Type | Value |
-> |---|---|---|
-> | **DEV_FRONTEND_DOMAIN** | A | `<lb_ip_address>` |
->
-> Add this A record in your DNS provider. The HTTPS load balancer routes traffic as follows:
-> - `https://DEV_FRONTEND_DOMAIN/` → frontend
-> - `https://DEV_FRONTEND_DOMAIN/api/` → backend
->
-> No separate DNS record is needed for the backend domain.
->
-> SSL certificate issuance is automatic and may take up to 15 minutes after DNS propagates.
-> You can monitor certificate status at: `https://console.cloud.google.com/net-services/loadbalancing/list/loadBalancers?project=DEV_PROJECT_ID`
+> If the certificate status shows **ACTIVE**, the dev environment is ready to verify.
+> If it still shows **PROVISIONING**, wait a few minutes and check again — provisioning can take up to 60 minutes total from when DNS was first configured.
 
-No terraform apply or git commit is needed for this step — the load balancer was already provisioned in Phase 8.
+Wait for the user to confirm the certificate is **ACTIVE** before proceeding to Phase 12.
 
-Wait for the user to confirm DNS has been configured before proceeding.
-
-**Log entry:** Append the lb_ip_address output and the DNS record the user needs to create.
+**Log entry:** Append SSL certificate status and approximate time elapsed since DNS was configured in Phase 8-5.
 
 ---
 
@@ -665,28 +722,43 @@ Once the user confirms dev is working, proceed to prod.
 
 ---
 
-## Phase 13: Push to `release` — deploy prod environment
+## Phase 13: Deploy prod environment via PR merge
 
-Push the `install` branch as the `release` branch to the deployment repository. The prod project's Cloud Build triggers (created in Phase 9) will fire automatically.
+Instead of pushing `install:release` directly, create a PR from `main` to `release` in the deployment repository. The merge commit's diff spans all accumulated changes, ensuring all Cloud Build path-filter triggers fire correctly.
+
+### 13-1. Create an empty initial `release` branch
+
+Create an orphan initial commit and push it as the `release` branch. This gives the PR merge commit a diff that covers all files under `backend/**/*` and `frontend/**/*`, guaranteeing all Cloud Build service triggers fire.
 
 ```bash
-git push app install:release
+git push app "$(git commit-tree "$(git hash-object -t tree /dev/null)" -m 'Initialize release branch')":refs/heads/release
+```
+
+### 13-2. Open a PR from `main` to `release`
+
+```bash
+gh pr create \
+  --repo GITHUB_OWNER/GITHUB_REPO \
+  --base release \
+  --head main \
+  --title "Deploy to prod: initial release" \
+  --body "Initial production deployment."
 ```
 
 Tell the user:
 
-> Pushed to the `release` branch of the deployment repository.
+> A pull request has been opened from `main` to `release` in the deployment repository.
+> Please review and merge the PR to trigger the first prod deployment.
+>
+> PR: `https://github.com/GITHUB_OWNER/GITHUB_REPO/pulls`
+>
+> After merging, both `backend-deploy` and `frontend-deploy` Cloud Build triggers will fire automatically because the merge commit's diff covers all application files.
 >
 > Build status: `https://console.cloud.google.com/cloud-build/builds?project=PROD_PROJECT_ID`
 
-Wait up to 30 seconds. If `backend-deploy` and `frontend-deploy` do **not** appear automatically, it means the pushed commit did not change any files under `backend/**/*` or `frontend/**/*` (e.g., the most recent commit was a Terraform-only change). In that case, run them manually:
+### 13-3. Wait for prod builds
 
-```bash
-gcloud builds triggers run backend-deploy --branch=release --project=PROD_PROJECT_ID
-gcloud builds triggers run frontend-deploy --branch=release --project=PROD_PROJECT_ID
-```
-
-Tell the user:
+Wait for the user to merge the PR and confirm both prod builds succeed.
 
 > Two builds are running:
 > - `backend-deploy` → deploys `backend-app` to Cloud Run (prod)
@@ -694,41 +766,25 @@ Tell the user:
 >
 > Let me know when both succeed.
 
-Wait for the user to confirm both prod builds succeed.
-
-**Log entry:** Append whether prod builds fired automatically or required manual trigger runs, and the time taken.
+**Log entry:** Append the PR URL, whether builds fired automatically after merge, and the time taken.
 
 ---
 
-## Phase 14: Configure prod DNS
+## Phase 14: Verify prod SSL certificate
 
-The prod HTTPS load balancer was provisioned in Phase 9. Get the static IP:
-
-```bash
-cd infra/prod && terraform output -raw lb_ip_address
-```
+Prod DNS was configured in Phase 9-5. Check whether SSL certificate provisioning has completed:
 
 Tell the user:
 
-> Please add the following DNS record for the prod frontend domain:
+> Prod DNS was configured in Phase 9-5. Check SSL certificate status at:
+> `https://console.cloud.google.com/net-services/loadbalancing/list/loadBalancers?project=PROD_PROJECT_ID`
 >
-> | Domain | Type | Value |
-> |---|---|---|
-> | **PROD_FRONTEND_DOMAIN** | A | `<lb_ip_address>` |
->
-> Add this A record in your DNS provider. The HTTPS load balancer routes traffic as follows:
-> - `https://PROD_FRONTEND_DOMAIN/` → frontend
-> - `https://PROD_FRONTEND_DOMAIN/api/` → backend
->
-> No separate DNS record is needed for the backend domain.
->
-> **Note:** Prod IAP is enabled with an empty `iap_allowed_members` list, so all external access is blocked by default. To grant access, add email addresses to `iap_allowed_members` in `infra/prod/_locals.tf` and run `terraform apply`.
+> If the certificate status shows **ACTIVE**, the prod environment is ready to verify.
+> If it still shows **PROVISIONING**, wait a few minutes and check again — provisioning can take up to 60 minutes total from when DNS was first configured.
 
-No terraform apply or git commit is needed for this step — the load balancer was already provisioned in Phase 9.
+Wait for the user to confirm the certificate is **ACTIVE** before proceeding to Phase 15.
 
-Wait for the user to confirm DNS has been configured before proceeding.
-
-**Log entry:** Append the lb_ip_address output and the DNS record the user needs to create.
+**Log entry:** Append SSL certificate status and approximate time elapsed since DNS was configured in Phase 9-5.
 
 ---
 
@@ -758,7 +814,7 @@ Summarize the completed deployment:
   - Backend API: `https://PROD_FRONTEND_DOMAIN/api/`
   - Auto-deploys on every push to `release` in the deployment repository
   - IAP: enabled, all access blocked by default; add members to `iap_allowed_members` in `infra/prod/_locals.tf` to grant access
-- **Release process**: merge `main` into `release` and push → auto-deploys to prod
+- **Release process**: open a PR from `main` to `release` in the deployment repository and merge it → the merge commit triggers all relevant Cloud Build deploys automatically
 - **Dev build status**: `https://console.cloud.google.com/cloud-build/builds?project=DEV_PROJECT_ID`
 - **Prod build status**: `https://console.cloud.google.com/cloud-build/builds?project=PROD_PROJECT_ID`
 

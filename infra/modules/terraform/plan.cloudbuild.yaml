@@ -2,12 +2,30 @@ steps:
   - id: "terraform init"
     name: "hashicorp/terraform:latest"
     args: ["-chdir=${_CHDIR}", "init", "-no-color"]
+  - id: "fetch iap credentials"
+    name: "gcr.io/google.com/cloudsdktool/cloud-sdk:slim"
+    entrypoint: "bash"
+    args:
+      - "-c"
+      - |
+        printf '%s' "$(gcloud secrets versions access latest \
+          --secret=oauth2-client-id --project=$PROJECT_ID 2>/dev/null || echo '')" \
+          > /workspace/oauth2_client_id
+        printf '%s' "$(gcloud secrets versions access latest \
+          --secret=oauth2-client-secret --project=$PROJECT_ID 2>/dev/null || echo '')" \
+          > /workspace/oauth2_client_secret
   - id: "terraform validate"
     name: "hashicorp/terraform:latest"
     args: ["-chdir=${_CHDIR}", "validate", "-no-color"]
   - id: "terraform plan"
     name: "hashicorp/terraform:latest"
-    args: ["-chdir=${_CHDIR}", "plan", "-no-color"]
+    entrypoint: "sh"
+    args:
+      - "-c"
+      - |
+        terraform -chdir=${_CHDIR} plan -no-color \
+          -var="oauth2_client_id=$(cat /workspace/oauth2_client_id)" \
+          -var="oauth2_client_secret=$(cat /workspace/oauth2_client_secret)"
 
 options:
   logging: "CLOUD_LOGGING_ONLY"

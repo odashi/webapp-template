@@ -310,6 +310,7 @@ gcloud services enable \
   iam.googleapis.com \
   iap.googleapis.com \
   run.googleapis.com \
+  secretmanager.googleapis.com \
   --project=DEV_PROJECT_ID
 ```
 
@@ -332,6 +333,7 @@ gcloud services enable \
   iam.googleapis.com \
   iap.googleapis.com \
   run.googleapis.com \
+  secretmanager.googleapis.com \
   --project=PROD_PROJECT_ID
 ```
 
@@ -554,11 +556,60 @@ Tell the user:
 > SSL certificate provisioning is automatic and may take **15–60 minutes** after DNS propagates. You can monitor status at:
 > `https://console.cloud.google.com/net-services/loadbalancing/list/loadBalancers?project=DEV_PROJECT_ID`
 >
-> There is no need to wait for SSL before continuing — proceed to Phase 9 now.
+> There is no need to wait for SSL before continuing — proceed to Phase 8-6 now.
 
 Wait for the user to confirm the DNS record has been added, then continue.
 
 **Log entry:** Append the lb_ip_address output and the DNS record the user needs to create.
+
+---
+
+### 8-6. Set up IAP OAuth credentials for dev (skip if `enable_iap = false`)
+
+If `enable_iap = true` in `infra/dev/_locals.tf` (the default), configure IAP OAuth credentials now. The Secret Manager secrets were created by the `terraform apply` above.
+
+#### 8-6-1. Create an OAuth 2.0 client in the GCP Console
+
+Tell the user:
+
+> Open the GCP Console for the dev project and create an OAuth 2.0 client:
+>
+> 1. Go to **APIs & Services → Credentials**:
+>    `https://console.cloud.google.com/apis/credentials?project=DEV_PROJECT_ID`
+> 2. Click **Create Credentials → OAuth client ID**
+> 3. Set **Application type** to **Web application**
+> 4. Set **Name** to `IAP` (or any name)
+> 5. Click **Create**
+> 6. Copy the **Client ID** and **Client secret** — you will need them in the next step
+>
+> Note: If prompted to configure the OAuth consent screen first, set it to **Internal** type with your support email, then return to Credentials to create the client.
+
+Wait for the user to confirm they have the Client ID and Client secret.
+
+#### 8-6-2. Store credentials in Secret Manager
+
+```bash
+printf '%s' 'PASTE_CLIENT_ID_HERE' | \
+  gcloud secrets versions add oauth2-client-id \
+  --data-file=- --project=DEV_PROJECT_ID
+
+printf '%s' 'PASTE_CLIENT_SECRET_HERE' | \
+  gcloud secrets versions add oauth2-client-secret \
+  --data-file=- --project=DEV_PROJECT_ID
+```
+
+Substitute the actual Client ID and Client secret values provided by the user. Run these commands directly rather than having the user paste them into a shell that might log the values.
+
+#### 8-6-3. Verify secrets are accessible
+
+```bash
+gcloud secrets versions access latest \
+  --secret=oauth2-client-id --project=DEV_PROJECT_ID 2>&1 | head -c 8
+```
+
+Confirm that output begins with the first 8 characters of the Client ID (not an error). If the command fails, check that the secret version was added correctly.
+
+**Log entry:** Append whether the OAuth client was created, that the secret was stored (do NOT log the credential values), and whether the verification check passed.
 
 ---
 
@@ -641,11 +692,56 @@ Tell the user:
 > SSL certificate provisioning may take **15–60 minutes** after DNS propagates. Monitor status at:
 > `https://console.cloud.google.com/net-services/loadbalancing/list/loadBalancers?project=PROD_PROJECT_ID`
 >
-> There is no need to wait for SSL before continuing — proceed to Phase 10 now.
+> There is no need to wait for SSL before continuing — proceed to Phase 9-6 now.
 
 Wait for the user to confirm the DNS record has been added, then continue.
 
 **Log entry:** Append the lb_ip_address output and the DNS record the user needs to create.
+
+---
+
+### 9-6. Set up IAP OAuth credentials for prod (skip if `enable_iap = false`)
+
+If `enable_iap = true` in `infra/prod/_locals.tf` (the default), configure IAP OAuth credentials for the prod project now.
+
+#### 9-6-1. Create an OAuth 2.0 client in the GCP Console
+
+Tell the user:
+
+> Open the GCP Console for the **prod** project and create an OAuth 2.0 client (same steps as Phase 8-6-1, but for the prod project):
+>
+> 1. Go to **APIs & Services → Credentials**:
+>    `https://console.cloud.google.com/apis/credentials?project=PROD_PROJECT_ID`
+> 2. Click **Create Credentials → OAuth client ID**
+> 3. Set **Application type** to **Web application**
+> 4. Set **Name** to `IAP`
+> 5. Click **Create**
+> 6. Copy the **Client ID** and **Client secret**
+
+Wait for the user to confirm they have the prod Client ID and Client secret.
+
+#### 9-6-2. Store credentials in Secret Manager
+
+```bash
+printf '%s' 'PASTE_PROD_CLIENT_ID_HERE' | \
+  gcloud secrets versions add oauth2-client-id \
+  --data-file=- --project=PROD_PROJECT_ID
+
+printf '%s' 'PASTE_PROD_CLIENT_SECRET_HERE' | \
+  gcloud secrets versions add oauth2-client-secret \
+  --data-file=- --project=PROD_PROJECT_ID
+```
+
+#### 9-6-3. Verify secrets are accessible
+
+```bash
+gcloud secrets versions access latest \
+  --secret=oauth2-client-id --project=PROD_PROJECT_ID 2>&1 | head -c 8
+```
+
+Confirm that the output begins with the first 8 characters of the prod Client ID.
+
+**Log entry:** Append whether the OAuth client was created, that the secret was stored (do NOT log the credential values), and whether the verification check passed.
 
 ---
 

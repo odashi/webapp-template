@@ -237,17 +237,6 @@ Tell the user:
 
 > Configuration changes will be made on the `install` branch. This branch is never pushed to the template repository (`origin`) — it is only pushed to the deployment repository (`app`). Template improvements stay on `main`.
 
-### If a template improvement is needed during the wizard
-
-When the user requests a fix to the wizard or template files (not deployment config):
-
-1. Commit any pending `install` changes: `git add -A && git commit -m "..."` (if any)
-2. `git checkout main`
-3. Apply the fix, commit, and push to remote
-4. `git checkout install`
-5. `git merge main` to bring the fix into `install`
-6. Resume the wizard
-
 **Log entry:** Append which branch was active and what action was taken (already on install / checked out / created new).
 
 ---

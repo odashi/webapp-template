@@ -8,8 +8,8 @@ ENV PORT=8080
 ENV CORS_ORIGIN=http://localhost:5173
 
 COPY pyproject.toml uv.lock ./
-RUN uv sync --system --compile-bytecode --frozen --no-dev
+RUN uv sync --compile-bytecode --frozen --no-dev
 
 COPY src/ src/
 
-ENTRYPOINT ["python", "src/main.py"]
+ENTRYPOINT ["uv", "run", "python", "src/main.py"]

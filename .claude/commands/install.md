@@ -722,51 +722,56 @@ Once the user confirms dev is working, proceed to prod.
 
 ---
 
-## Phase 13: Deploy prod environment via PR merge
+## Phase 13: Deploy prod environment
 
-Instead of pushing `install:release` directly, create a PR from `main` to `release` in the deployment repository. The merge commit's diff spans all accumulated changes, ensuring all Cloud Build path-filter triggers fire correctly.
-
-### 13-1. Create an empty initial `release` branch
-
-Create an orphan initial commit and push it as the `release` branch. This gives the PR merge commit a diff that covers all files under `backend/**/*` and `frontend/**/*`, guaranteeing all Cloud Build service triggers fire.
+### 13-1. Push `install` branch as `release`
 
 ```bash
-git push app "$(git commit-tree "$(git hash-object -t tree /dev/null)" -m 'Initialize release branch')":refs/heads/release
+git push app install:release
 ```
 
-### 13-2. Open a PR from `main` to `release`
+This creates the `release` branch in the deployment repository and triggers the prod Cloud Build triggers.
+
+### 13-2. Run prod service triggers manually
+
+Cloud Build evaluates only the diff of the HEAD commit. To guarantee both service triggers fire on the initial deployment regardless of which files the last commit touched, run them manually:
 
 ```bash
-gh pr create \
-  --repo GITHUB_OWNER/GITHUB_REPO \
-  --base release \
-  --head main \
-  --title "Deploy to prod: initial release" \
-  --body "Initial production deployment."
+gcloud builds triggers list --project=PROD_PROJECT_ID --format="table(name)"
 ```
+
+```bash
+gcloud builds triggers run backend-deploy --branch=release --project=PROD_PROJECT_ID
+gcloud builds triggers run frontend-deploy --branch=release --project=PROD_PROJECT_ID
+```
+
+If the trigger names differ from `backend-deploy` / `frontend-deploy`, use the actual names shown above.
 
 Tell the user:
 
-> A pull request has been opened from `main` to `release` in the deployment repository.
-> Please review and merge the PR to trigger the first prod deployment.
->
-> PR: `https://github.com/GITHUB_OWNER/GITHUB_REPO/pulls`
->
-> After merging, both `backend-deploy` and `frontend-deploy` Cloud Build triggers will fire automatically because the merge commit's diff covers all application files.
+> Prod builds have started.
 >
 > Build status: `https://console.cloud.google.com/cloud-build/builds?project=PROD_PROJECT_ID`
-
-### 13-3. Wait for prod builds
-
-Wait for the user to merge the PR and confirm both prod builds succeed.
-
+>
 > Two builds are running:
 > - `backend-deploy` → deploys `backend-app` to Cloud Run (prod)
 > - `frontend-deploy` → deploys `frontend-app` to Cloud Run (prod)
 >
 > Let me know when both succeed.
 
-**Log entry:** Append the PR URL, whether builds fired automatically after merge, and the time taken.
+### 13-3. Document future release workflow
+
+Once both prod builds succeed, tell the user:
+
+> Going forward, to deploy to production:
+> 1. Open a pull request from `main` to `release` in the deployment repository
+> 2. Merge the PR — the merge commit's diff covers all accumulated changes, ensuring all relevant Cloud Build triggers fire automatically
+>
+> This avoids the initial-deployment issue where the HEAD commit may only touch a subset of files.
+
+Wait for the user to confirm both prod builds succeed.
+
+**Log entry:** Append the trigger list output, whether builds fired automatically or required manual runs, and the time taken.
 
 ---
 
@@ -814,7 +819,7 @@ Summarize the completed deployment:
   - Backend API: `https://PROD_FRONTEND_DOMAIN/api/`
   - Auto-deploys on every push to `release` in the deployment repository
   - IAP: enabled, all access blocked by default; add members to `iap_allowed_members` in `infra/prod/_locals.tf` to grant access
-- **Release process**: open a PR from `main` to `release` in the deployment repository and merge it → the merge commit triggers all relevant Cloud Build deploys automatically
+- **Release process**: open a PR from `main` to `release` in the deployment repository and merge it → the merge commit's diff covers all accumulated changes, triggering all relevant Cloud Build deploys automatically
 - **Dev build status**: `https://console.cloud.google.com/cloud-build/builds?project=DEV_PROJECT_ID`
 - **Prod build status**: `https://console.cloud.google.com/cloud-build/builds?project=PROD_PROJECT_ID`
 

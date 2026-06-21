@@ -42,7 +42,6 @@ locals {
   # IAP — dev is protected by default; only listed members can access the environment.
   # To open dev to the public, set enable_iap = false.
   enable_iap          = true
-  iap_support_email   = "[[[iap.support_email]]]"
   iap_allowed_members = [
     # Add members here to grant access (e.g., "user:alice@example.com"):
   ]

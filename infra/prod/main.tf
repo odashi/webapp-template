@@ -89,7 +89,8 @@ module "lb" {
   frontend_domain  = local.domains.frontend
   frontend_service = module.frontend.service_name
   backend_service  = module.backend.service_name
-  enable_iap       = local.enable_iap
-  support_email    = local.iap_support_email
-  allowed_members  = local.iap_allowed_members
+  enable_iap           = local.enable_iap
+  oauth2_client_id     = var.oauth2_client_id
+  oauth2_client_secret = var.oauth2_client_secret
+  allowed_members      = local.iap_allowed_members
 }

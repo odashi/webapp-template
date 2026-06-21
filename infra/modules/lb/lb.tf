@@ -56,13 +56,6 @@ resource "google_compute_backend_service" "frontend" {
       oauth2_client_secret = var.oauth2_client_secret
     }
   }
-
-  lifecycle {
-    precondition {
-      condition     = !var.enable_iap || (var.oauth2_client_id != "" && var.oauth2_client_secret != "")
-      error_message = "oauth2_client_id and oauth2_client_secret must be non-empty when enable_iap = true."
-    }
-  }
 }
 
 # LB backend service for the backend Cloud Run service.
@@ -81,13 +74,6 @@ resource "google_compute_backend_service" "backend_api" {
       enabled              = true
       oauth2_client_id     = var.oauth2_client_id
       oauth2_client_secret = var.oauth2_client_secret
-    }
-  }
-
-  lifecycle {
-    precondition {
-      condition     = !var.enable_iap || (var.oauth2_client_id != "" && var.oauth2_client_secret != "")
-      error_message = "oauth2_client_id and oauth2_client_secret must be non-empty when enable_iap = true."
     }
   }
 }

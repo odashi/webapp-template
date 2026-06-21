@@ -18,6 +18,25 @@ Follow these phases in order. **Do not skip phases.** Summarize what was done at
 
 ---
 
+## Logging policy
+
+This wizard keeps a **detailed session log** at `logs/install-TIMESTAMP.md` (created in Phase 0a). The log serves as feedback to the webapp-template developers — record everything, including errors, unexpected output, and any friction the user encounters.
+
+**After every phase completes**, append a log entry that includes:
+
+- Phase name and completion time (run `date '+%Y-%m-%d %H:%M:%S'`)
+- Every shell command run, with **complete stdout and stderr verbatim** in fenced code blocks — do not summarize or truncate
+- Any errors or unexpected output, clearly marked with `**Error:**`
+- What the user said at each confirmation prompt (e.g., "User confirmed: yes", "User provided language: Japanese")
+- Any manual steps the user performed (e.g., Cloud Build GitHub App connection)
+- Any friction, confusion, workarounds, or unexpected behavior — even minor ones
+
+Use Bash (`>>` append) to write entries to the log file. The log is local only; do not commit it to the template repository (`origin`).
+
+At the end of the wizard, ask the user for open-ended feedback and append their response to the log.
+
+---
+
 ## Phase 0: Set communication language
 
 Ask the user:
@@ -35,6 +54,41 @@ Respond to the user in [CHOSEN_LANGUAGE].
 Replace `[CHOSEN_LANGUAGE]` with the language the user chose (e.g., `English`, `Japanese`). If `CLAUDE.md` already exists, read it first and append the `## Language` section only if it is not already present; otherwise update the existing value.
 
 From this point forward, communicate with the user in the chosen language.
+
+**Log entry:** Append to the log: chosen language, and the CLAUDE.md change made.
+
+---
+
+## Phase 0a: Create log file
+
+Get the current timestamp:
+
+```bash
+date '+%Y%m%d-%H%M%S'
+```
+
+Create the `logs/` directory if it does not exist, and ensure it is excluded from git:
+
+```bash
+mkdir -p logs
+grep -qxF 'logs/' .gitignore 2>/dev/null || echo 'logs/' >> .gitignore
+```
+
+Use the Write tool to create `logs/install-TIMESTAMP.md` (replace `TIMESTAMP` with the value above). Fill in the header values by running the commands shown:
+
+```markdown
+# Install Wizard Log
+
+- **Wizard**: /install
+- **Started**: (output of: date '+%Y-%m-%d %H:%M:%S')
+- **Working directory**: (output of: pwd)
+- **Git branch**: (output of: git branch --show-current)
+- **Platform**: (output of: uname -a)
+
+---
+```
+
+All subsequent log entries append to this file using Bash `>>`.
 
 ---
 
@@ -71,6 +125,8 @@ If `gh` is missing, note that the user will need to create the GitHub repository
 
 Once all required tools are present, confirm with the user before proceeding.
 
+**Log entry:** Append tool version outputs and which tools were present/missing.
+
 ---
 
 ## Phase 0c: What this wizard will do
@@ -85,48 +141,51 @@ Explain to the user what this wizard will do, including all changes it makes to 
 > - Install the Cloud Build GitHub App on that repository (for both GCP projects)
 >
 > **Google Cloud changes (dev project: `DEV_PROJECT_ID`):**
-> - Enable APIs: Artifact Registry, Cloud Build, Cloud Resource Manager, IAM, Cloud Run
+> - Enable APIs: Artifact Registry, Cloud Build, Cloud Resource Manager, Compute Engine, IAM, IAP, Cloud Run
 > - Create a GCS bucket for Terraform state
 > - Create a Terraform service account with the necessary IAM roles
 > - Create an Artifact Registry repository for Docker images
 > - Create Cloud Build triggers (CI/CD pipelines for backend, frontend, and Terraform)
 > - Deploy backend and frontend applications to Cloud Run
-> - Create Cloud Run domain mappings for your custom domains
+> - Create an HTTPS load balancer with SSL certificate for your custom domain
 >
 > **Google Cloud changes (prod project: `PROD_PROJECT_ID`):**
 > - Same as above for the prod project
 >
 > **Local file changes:**
 > - `CLAUDE.md` — language preference (already done in Phase 0)
-> - `infra/dev/_locals.tf`, `infra/dev/main.tf` — filled with your dev project values
+> - `infra/dev/_locals.tf`, `infra/dev/main.tf` — filled with your dev project values and IAP allowed members
 > - `infra/prod/_locals.tf`, `infra/prod/main.tf` — filled with your prod project values
 >
-> Note: placeholder values are only filled on the local `init-config` branch. The template repository (`origin`) will keep placeholder values on `main`.
+> Note: placeholder values are only filled on the local `install` branch. The template repository (`origin`) will keep placeholder values on `main`.
 >
 > **DNS changes (manual):**
-> - You will need to add CNAME records in your DNS provider for your custom domains (shown later in the wizard).
+> - You will need to add A records in your DNS provider pointing to the load balancer IP (shown later in the wizard).
 >
 > Do you want to proceed?
 
 Wait for the user to confirm before continuing.
 
+**Log entry:** Append the summary of what the wizard will do and whether the user confirmed.
+
 ---
 
-## Phase 1: Read configuration from deploy.config.json
+## Phase 1: Read configuration from install.json
 
-Read `deploy.config.json` at the repository root.
+Read `install.json` at the repository root.
 
 If the file does not exist, tell the user:
 
-> `deploy.config.json` was not found at the repository root. Please create it using the placeholder values in the existing template as a guide.
+> `install.json` was not found at the repository root. Please create it using the placeholder values in the existing template as a guide.
 
 If the file exists, read it and validate that **no value in the file contains `[[[`** — any occurrence of `[[[` means that field has not been filled in yet.
 
 Check each field and list any that still contain `[[[`. If any are found, tell the user:
 
-> Please edit `deploy.config.json` and replace all `[[[...]]]` placeholders with your actual values, then run the wizard again.
+> Please edit `install.json` and replace all `[[[...]]]` placeholders with your actual values, then run the wizard again.
 
 The fields to fill in are:
+- `iap.support_email` — email shown on the OAuth consent screen (e.g. `admin@example.com`)
 - `region.default` — GCP region (e.g. `asia-northeast1`)
 - `region.storage` — GCS storage region (e.g. `ASIA-NORTHEAST1`)
 - `dev.project_id` — dev GCP project ID
@@ -136,14 +195,13 @@ The fields to fill in are:
 - `github.owner` — GitHub username or organization
 - `github.name` — deployment repository name (will be created in Phase 6)
 - `domains.dev.frontend` — dev frontend custom domain
-- `domains.dev.backend` — dev backend custom domain
 - `domains.prod.frontend` — prod frontend custom domain
-- `domains.prod.backend` — prod backend custom domain
 
 Do not proceed until the file is valid. If the user says they have updated it, re-read and re-validate.
 
 Once valid, extract and store the following variables for use throughout the wizard:
 
+- `IAP_SUPPORT_EMAIL` = `.iap.support_email`
 - `REGION` = `.region.default`
 - `STORAGE_REGION` = `.region.storage`
 - `DEV_PROJECT_ID` = `.dev.project_id`
@@ -153,17 +211,17 @@ Once valid, extract and store the following variables for use throughout the wiz
 - `GITHUB_OWNER` = `.github.owner`
 - `GITHUB_REPO` = `.github.name`
 - `DEV_FRONTEND_DOMAIN` = `.domains.dev.frontend`
-- `DEV_BACKEND_DOMAIN` = `.domains.dev.backend`
 - `PROD_FRONTEND_DOMAIN` = `.domains.prod.frontend`
-- `PROD_BACKEND_DOMAIN` = `.domains.prod.backend`
 
 Show the user the values that were read and confirm before proceeding.
 
+**Log entry:** Append all extracted values from `install.json` and any validation errors found.
+
 ---
 
-## Phase 1b: Ensure working on init-config branch
+## Phase 1b: Ensure working on install branch
 
-`init-config` is a **local-only** branch used to keep deployment configuration separate from template improvements. It is never pushed to `origin` (the template repo).
+`install` is a **local-only** branch used to keep deployment configuration separate from template improvements. It is never pushed to `origin` (the template repo).
 
 Check the current branch:
 
@@ -171,30 +229,32 @@ Check the current branch:
 git branch --show-current
 ```
 
-- If already on `init-config`: continue.
-- If `init-config` exists locally but is not checked out: `git checkout init-config`
-- If `init-config` does not exist yet: `git checkout -b init-config`
+- If already on `install`: continue.
+- If `install` exists locally but is not checked out: `git checkout install`
+- If `install` does not exist yet: `git checkout -b install`
 
 Tell the user:
 
-> Configuration changes will be made on the `init-config` branch. This branch is never pushed to the template repository (`origin`) — it is only pushed to the deployment repository (`app`). Template improvements stay on `main`.
+> Configuration changes will be made on the `install` branch. This branch is never pushed to the template repository (`origin`) — it is only pushed to the deployment repository (`app`). Template improvements stay on `main`.
 
 ### If a template improvement is needed during the wizard
 
 When the user requests a fix to the wizard or template files (not deployment config):
 
-1. Commit any pending `init-config` changes: `git add -A && git commit -m "..."` (if any)
+1. Commit any pending `install` changes: `git add -A && git commit -m "..."` (if any)
 2. `git checkout main`
 3. Apply the fix, commit, and push to remote
-4. `git checkout init-config`
-5. `git merge main` to bring the fix into `init-config`
+4. `git checkout install`
+5. `git merge main` to bring the fix into `install`
 6. Resume the wizard
+
+**Log entry:** Append which branch was active and what action was taken (already on install / checked out / created new).
 
 ---
 
 ## Phase 2: Fill in configuration placeholders
 
-Using the values read from `deploy.config.json`, edit the Terraform files to replace all `[[[...]]]` placeholders. Each placeholder name matches the JSON path of the corresponding field in `deploy.config.json`.
+Using the values read from `install.json`, edit the Terraform files to replace all `[[[...]]]` placeholders. Each placeholder name matches the JSON path of the corresponding field in `install.json`.
 
 Edit `infra/dev/_locals.tf`:
 - `[[[dev.project_id]]]` → `DEV_PROJECT_ID`
@@ -204,7 +264,19 @@ Edit `infra/dev/_locals.tf`:
 - `[[[github.owner]]]` → `GITHUB_OWNER`
 - `[[[github.name]]]` → `GITHUB_REPO`
 - `[[[domains.dev.frontend]]]` → `DEV_FRONTEND_DOMAIN`
-- `[[[domains.dev.backend]]]` → `DEV_BACKEND_DOMAIN`
+- `[[[iap.support_email]]]` → `IAP_SUPPORT_EMAIL`
+
+Then ask the user:
+
+> Who should have access to the dev environment via IAP? Enter your email address (e.g. `alice@example.com`):
+
+Store the response as `DEV_IAP_EMAIL`. Edit the `iap_allowed_members` block in `infra/dev/_locals.tf` to add the user's address:
+
+```hcl
+iap_allowed_members = [
+  "user:DEV_IAP_EMAIL",
+]
+```
 
 Edit `infra/dev/main.tf`:
 - `[[[dev.project_id]]]-terraform` → `DEV_PROJECT_ID-terraform`
@@ -217,12 +289,14 @@ Edit `infra/prod/_locals.tf`:
 - `[[[github.owner]]]` → `GITHUB_OWNER`
 - `[[[github.name]]]` → `GITHUB_REPO`
 - `[[[domains.prod.frontend]]]` → `PROD_FRONTEND_DOMAIN`
-- `[[[domains.prod.backend]]]` → `PROD_BACKEND_DOMAIN`
+- `[[[iap.support_email]]]` → `IAP_SUPPORT_EMAIL`
 
 Edit `infra/prod/main.tf`:
 - `[[[prod.project_id]]]-terraform` → `PROD_PROJECT_ID-terraform`
 
 After all edits, show the user a brief summary of every file changed. Ask them to confirm before proceeding.
+
+**Log entry:** Append the list of files edited, the email address entered for dev IAP access, and any issues encountered during placeholder substitution.
 
 ---
 
@@ -250,6 +324,8 @@ gcloud services enable \
 
 Confirm with the user before proceeding.
 
+**Log entry:** Append the full output of the `gcloud services enable` command for dev, including any errors.
+
 ---
 
 ## Phase 4: Bootstrap prod GCP project
@@ -268,6 +344,8 @@ gcloud services enable \
 
 Confirm with the user before proceeding.
 
+**Log entry:** Append the full output of the `gcloud services enable` command for prod, including any errors.
+
 ---
 
 ## Phase 5: Verify git repository
@@ -276,15 +354,17 @@ Confirm with the user before proceeding.
 git -C . rev-parse --is-inside-work-tree 2>/dev/null && echo "git_exists" || echo "no_git"
 ```
 
-If `no_git`, initialize, create `main`, and then create `init-config`:
+If `no_git`, initialize, create `main`, and then create `install`:
 
 ```bash
 git init
 git checkout -b main
-git checkout -b init-config
+git checkout -b install
 ```
 
-If git already exists, confirm the current branch is `init-config` (Phase 1b should have handled this).
+If git already exists, confirm the current branch is `install` (Phase 1b should have handled this).
+
+**Log entry:** Append the git status check result.
 
 ---
 
@@ -300,7 +380,7 @@ Required for Docker's `npm ci` during Cloud Build:
 cd frontend && npm install
 ```
 
-### 6-2. Commit all changes on init-config
+### 6-2. Commit all changes on install
 
 ```bash
 git add -A
@@ -355,15 +435,17 @@ git remote add app git@github.com:GITHUB_OWNER/GITHUB_REPO.git
 
 ### 6-5. Push to deployment repository
 
-Push the `init-config` branch (which contains real configuration values) as `main` to the deployment repository:
+Push the `install` branch (which contains real configuration values) as `main` to the deployment repository:
 
 ```bash
-git push app init-config:main
+git push app install:main
 ```
 
-This is the only push to the deployment repo `main` branch that originates from `init-config`. From here on, everyday development happens in the deployment repository itself, not the template.
+This is the only push to the deployment repo `main` branch that originates from `install`. From here on, everyday development happens in the deployment repository itself, not the template.
 
 Confirm with the user before proceeding.
+
+**Log entry:** Append the outputs of `npm install`, `git commit`, `gh repo create`, and `git push` commands; note whether `gh` was used or the user created the repo manually.
 
 ---
 
@@ -394,6 +476,8 @@ Tell the user:
 > Let me know when both connections are complete.
 
 Wait for the user to confirm both before proceeding.
+
+**Log entry:** Append how long the user took to complete the manual Cloud Build GitHub App connection, and any issues they reported (e.g., difficulty finding the Triggers page, auth dialogs, repository selection errors).
 
 ---
 
@@ -446,6 +530,8 @@ git add infra/dev/.terraform.lock.hcl infra/dev/main.tf
 git commit -m "Enable GCS backend for dev Terraform state"
 ```
 
+**Log entry:** Append the full output of `terraform init`, `terraform plan`, and `terraform apply` for dev; the state migration output; any errors and how they were resolved.
+
 ---
 
 ## Phase 9: Run Terraform for prod project
@@ -489,10 +575,12 @@ cd infra/prod && terraform init -migrate-state
 ```bash
 git add infra/prod/.terraform.lock.hcl infra/prod/main.tf
 git commit -m "Enable GCS backend for prod Terraform state"
-git push app init-config:main
+git push app install:main
 ```
 
 This push will trigger the dev Terraform CI (no-op since state is up to date).
+
+**Log entry:** Append the full output of `terraform init`, `terraform plan`, `terraform apply`, and state migration for prod; any errors and how they were resolved.
 
 ---
 
@@ -531,46 +619,40 @@ Wait for the user to confirm both dev builds succeed before proceeding.
 
 Note: Going forward, pushes to `main` that include changes under `backend/**/*` or `frontend/**/*` will auto-trigger the respective service build. Pushes that only change Terraform files (`infra/**/*`) will trigger only the `terraform-apply` trigger.
 
+**Log entry:** Append the trigger list output, which triggers were run (manual or auto), and the time taken for dev builds to complete. Note whether the user had to run triggers manually or they fired automatically.
+
 ---
 
-## Phase 11: Apply dev domain mappings
+## Phase 11: Configure dev DNS
 
-Cloud Run services are now deployed. Enable domain mappings by editing `infra/dev/_locals.tf`:
-
-Change:
-```hcl
-  enable_domain_mapping = false
-```
-to:
-```hcl
-  enable_domain_mapping = true
-```
-
-Then apply:
+The HTTPS load balancer and its SSL certificate were provisioned in Phase 8. Get the static IP:
 
 ```bash
-cd infra/dev && terraform apply -auto-approve
+cd infra/dev && terraform output -raw lb_ip_address
 ```
 
-Commit and push to the deployment repo so the state is reflected:
+Tell the user:
 
-```bash
-git add infra/dev/_locals.tf
-git commit -m "Enable dev domain mappings"
-git push app init-config:main
-```
-
-After apply, tell the user:
-
-> Please add the following DNS records for the dev domains. All Cloud Run custom domains use a CNAME pointing to `ghs.googlehosted.com.`:
+> Please add the following DNS record for the dev frontend domain:
 >
 > | Domain | Type | Value |
 > |---|---|---|
-> | **DEV_FRONTEND_DOMAIN** | CNAME | `ghs.googlehosted.com.` |
-> | **DEV_BACKEND_DOMAIN** | CNAME | `ghs.googlehosted.com.` |
+> | **DEV_FRONTEND_DOMAIN** | A | `<lb_ip_address>` |
 >
-> Add these CNAME records in your DNS provider. Propagation may take up to 1 hour.
-> You can monitor SSL certificate issuance at: `https://console.cloud.google.com/run/domains?project=DEV_PROJECT_ID`
+> Add this A record in your DNS provider. The HTTPS load balancer routes traffic as follows:
+> - `https://DEV_FRONTEND_DOMAIN/` → frontend
+> - `https://DEV_FRONTEND_DOMAIN/api/` → backend
+>
+> No separate DNS record is needed for the backend domain.
+>
+> SSL certificate issuance is automatic and may take up to 15 minutes after DNS propagates.
+> You can monitor certificate status at: `https://console.cloud.google.com/net-services/loadbalancing/list/loadBalancers?project=DEV_PROJECT_ID`
+
+No terraform apply or git commit is needed for this step — the load balancer was already provisioned in Phase 8.
+
+Wait for the user to confirm DNS has been configured before proceeding.
+
+**Log entry:** Append the lb_ip_address output and the DNS record the user needs to create.
 
 ---
 
@@ -582,18 +664,20 @@ gcloud run services list --region=REGION --project=DEV_PROJECT_ID
 
 Confirm `backend-app` and `frontend-app` are `READY`.
 
-Ask the user to open the dev frontend URL and confirm it loads. The backend health check at `https://DEV_BACKEND_DOMAIN/health` should return `{"status":"ok"}`.
+Ask the user to open `https://DEV_FRONTEND_DOMAIN` and confirm it loads. The backend health check at `https://DEV_FRONTEND_DOMAIN/api/health` should return `{"status":"ok"}`.
 
 Once the user confirms dev is working, proceed to prod.
+
+**Log entry:** Append the Cloud Run services list output; note whether the user confirmed the frontend loaded and the backend health check passed.
 
 ---
 
 ## Phase 13: Push to `release` — deploy prod environment
 
-Push the `init-config` branch as the `release` branch to the deployment repository. The prod project's Cloud Build triggers (created in Phase 9) will fire automatically.
+Push the `install` branch as the `release` branch to the deployment repository. The prod project's Cloud Build triggers (created in Phase 9) will fire automatically.
 
 ```bash
-git push app init-config:release
+git push app install:release
 ```
 
 Tell the user:
@@ -619,46 +703,39 @@ Tell the user:
 
 Wait for the user to confirm both prod builds succeed.
 
+**Log entry:** Append whether prod builds fired automatically or required manual trigger runs, and the time taken.
+
 ---
 
-## Phase 14: Apply prod domain mappings
+## Phase 14: Configure prod DNS
 
-Enable domain mappings by editing `infra/prod/_locals.tf`:
-
-Change:
-```hcl
-  enable_domain_mapping = false
-```
-to:
-```hcl
-  enable_domain_mapping = true
-```
-
-Then apply:
+The prod HTTPS load balancer was provisioned in Phase 9. Get the static IP:
 
 ```bash
-cd infra/prod && terraform apply -auto-approve
+cd infra/prod && terraform output -raw lb_ip_address
 ```
 
-Commit and push to the deployment repo:
+Tell the user:
 
-```bash
-git add infra/prod/_locals.tf
-git commit -m "Enable prod domain mappings"
-git push app init-config:release
-```
-
-After apply, tell the user:
-
-> Please add the following DNS records for the prod domains. All Cloud Run custom domains use a CNAME pointing to `ghs.googlehosted.com.`:
+> Please add the following DNS record for the prod frontend domain:
 >
 > | Domain | Type | Value |
 > |---|---|---|
-> | **PROD_FRONTEND_DOMAIN** | CNAME | `ghs.googlehosted.com.` |
-> | **PROD_BACKEND_DOMAIN** | CNAME | `ghs.googlehosted.com.` |
+> | **PROD_FRONTEND_DOMAIN** | A | `<lb_ip_address>` |
 >
-> Add these CNAME records in your DNS provider.
-> You can monitor SSL certificate issuance at: `https://console.cloud.google.com/run/domains?project=PROD_PROJECT_ID`
+> Add this A record in your DNS provider. The HTTPS load balancer routes traffic as follows:
+> - `https://PROD_FRONTEND_DOMAIN/` → frontend
+> - `https://PROD_FRONTEND_DOMAIN/api/` → backend
+>
+> No separate DNS record is needed for the backend domain.
+>
+> **Note:** Prod IAP is enabled with an empty `iap_allowed_members` list, so all external access is blocked by default. To grant access, add email addresses to `iap_allowed_members` in `infra/prod/_locals.tf` and run `terraform apply`.
+
+No terraform apply or git commit is needed for this step — the load balancer was already provisioned in Phase 9.
+
+Wait for the user to confirm DNS has been configured before proceeding.
+
+**Log entry:** Append the lb_ip_address output and the DNS record the user needs to create.
 
 ---
 
@@ -681,12 +758,34 @@ Summarize the completed deployment:
 
 - **Deployment repository**: `https://github.com/GITHUB_OWNER/GITHUB_REPO`
 - **Dev environment**: `https://DEV_FRONTEND_DOMAIN`
+  - Backend API: `https://DEV_FRONTEND_DOMAIN/api/`
   - Auto-deploys on every push to `main` in the deployment repository
+  - IAP: enabled; access restricted to members in `iap_allowed_members` in `infra/dev/_locals.tf`
 - **Prod environment**: `https://PROD_FRONTEND_DOMAIN`
+  - Backend API: `https://PROD_FRONTEND_DOMAIN/api/`
   - Auto-deploys on every push to `release` in the deployment repository
+  - IAP: enabled, all access blocked by default; add members to `iap_allowed_members` in `infra/prod/_locals.tf` to grant access
 - **Release process**: merge `main` into `release` and push → auto-deploys to prod
 - **Dev build status**: `https://console.cloud.google.com/cloud-build/builds?project=DEV_PROJECT_ID`
 - **Prod build status**: `https://console.cloud.google.com/cloud-build/builds?project=PROD_PROJECT_ID`
+
+**Log entry:** Append the Cloud Run services list output for prod and the Cloud Build triggers list for both projects.
+
+Then ask the user:
+
+> The installation is complete. Before we finish, do you have any feedback on the wizard? For example:
+> - Were any steps confusing or unclear?
+> - Did anything not work as expected?
+> - Are there steps you wish were automated?
+> - Any other suggestions for improvement?
+
+Append their response (verbatim) to the log under a `## User Feedback` section, then write a final `## Session End` section with the completion timestamp:
+
+```bash
+date '+%Y-%m-%d %H:%M:%S'
+```
+
+Tell the user the log has been saved to `logs/install-TIMESTAMP.md` and can be shared with the webapp-template developers as feedback.
 
 ---
 

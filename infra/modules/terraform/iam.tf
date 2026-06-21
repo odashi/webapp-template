@@ -1,4 +1,5 @@
 resource "google_service_account" "terraform" {
+  project      = var.project.id
   account_id   = "terraform"
   display_name = "Terraform service account"
 

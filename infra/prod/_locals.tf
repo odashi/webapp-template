@@ -8,7 +8,9 @@ locals {
     "artifactregistry.googleapis.com",
     "cloudbuild.googleapis.com",
     "cloudresourcemanager.googleapis.com",
+    "compute.googleapis.com",
     "iam.googleapis.com",
+    "iap.googleapis.com",
     "run.googleapis.com",
   ]
 
@@ -32,9 +34,19 @@ locals {
 
   domains = {
     frontend = "[[[domains.prod.frontend]]]"
-    backend  = "[[[domains.prod.backend]]]"
   }
 
-  # Set to true after Cloud Run services are deployed to enable domain mappings.
-  enable_domain_mapping = false
+  # Backend API URL: always served at /api on the frontend domain via the load balancer.
+  api_url = "https://${local.domains.frontend}/api"
+
+  # IAP is enabled by default so prod is inaccessible at launch.
+  # Add members to iap_allowed_members to grant access before public launch.
+  # Set enable_iap = false to open prod to the public (removes authentication entirely).
+  enable_iap          = true
+  iap_support_email   = "[[[iap.support_email]]]"
+  iap_allowed_members = [
+    # Add members here to grant access before public launch:
+    # "user:alice@example.com",
+    # "group:launch-team@example.com",
+  ]
 }

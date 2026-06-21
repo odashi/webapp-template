@@ -1,4 +1,7 @@
 {
+  "iap": {
+    "support_email": "[[[iap.support_email]]]"
+  },
   "region": {
     "default": "[[[region.default]]]",
     "storage": "[[[region.storage]]]"
@@ -17,12 +20,10 @@
   },
   "domains": {
     "dev": {
-      "frontend": "[[[domains.dev.frontend]]]",
-      "backend": "[[[domains.dev.backend]]]"
+      "frontend": "[[[domains.dev.frontend]]]"
     },
     "prod": {
-      "frontend": "[[[domains.prod.frontend]]]",
-      "backend": "[[[domains.prod.backend]]]"
+      "frontend": "[[[domains.prod.frontend]]]"
     }
   }
 }

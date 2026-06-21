@@ -1,9 +1,11 @@
 resource "google_service_account" "builder" {
+  project      = var.project.id
   account_id   = "${var.prefix}-builder"
   display_name = "${var.prefix} builder service account"
 }
 
 resource "google_service_account" "runner" {
+  project      = var.project.id
   account_id   = "${var.prefix}-runner"
   display_name = "${var.prefix} runner service account"
 }

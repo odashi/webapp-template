@@ -1,5 +1,5 @@
 ---
-allowed-tools: Bash(gcloud:*), Bash(terraform:*), Bash(git:*), Bash(find:*), Bash(grep:*), Bash(ls:*), Read, Edit
+allowed-tools: Bash(gcloud:*), Bash(terraform:*), Bash(git:*), Bash(find:*), Bash(grep:*), Bash(ls:*), Bash(mkdir:*), Bash(date:*), Bash(uname:*), Bash(pwd:*), Read, Edit, Write
 description: Interactive wizard to remove all GCP resources created by /install, stopping all billing
 ---
 
@@ -11,15 +11,69 @@ Follow these phases in order. **Do not skip phases.** Confirm with the user befo
 
 ---
 
+## Logging policy
+
+This wizard keeps a **detailed session log** at `logs/uninstall-TIMESTAMP.md` (created in Phase 0a). The log serves as feedback to the webapp-template developers — record everything, including errors, unexpected output, and any friction the user encounters.
+
+**After every phase completes**, append a log entry that includes:
+
+- Phase name and completion time (run `date '+%Y-%m-%d %H:%M:%S'`)
+- Every shell command run, with **complete stdout and stderr verbatim** in fenced code blocks — do not summarize or truncate
+- Any errors or unexpected output, clearly marked with `**Error:**`
+- What the user said at each confirmation prompt
+- Any resources that failed to delete and required manual cleanup
+- Any friction, confusion, workarounds, or unexpected behavior — even minor ones
+
+Use Bash (`>>` append) to write entries to the log file. The log is local only; do not commit it to the template repository (`origin`).
+
+At the end of the wizard, ask the user for open-ended feedback and append their response to the log.
+
+---
+
 ## Phase 0: Set communication language
 
 Check whether `CLAUDE.md` exists at the repository root and contains a `## Language` section. If it does, use that language for this session. If not, ask the user which language to use and continue in that language.
 
 ---
 
+## Phase 0a: Create log file
+
+Get the current timestamp:
+
+```bash
+date '+%Y%m%d-%H%M%S'
+```
+
+Create the `logs/` directory if it does not exist, and ensure it is excluded from git:
+
+```bash
+mkdir -p logs
+grep -qxF 'logs/' .gitignore 2>/dev/null || echo 'logs/' >> .gitignore
+```
+
+Use the Write tool to create `logs/uninstall-TIMESTAMP.md` (replace `TIMESTAMP` with the value above). Fill in the header values by running the commands shown:
+
+```markdown
+# Uninstall Wizard Log
+
+- **Wizard**: /uninstall
+- **Started**: (output of: date '+%Y-%m-%d %H:%M:%S')
+- **Working directory**: (output of: pwd)
+- **Git branch**: (output of: git branch --show-current)
+- **Platform**: (output of: uname -a)
+
+---
+```
+
+All subsequent log entries append to this file using Bash `>>`.
+
+**Log entry (Phase 0):** Append the chosen language and whether it was read from CLAUDE.md or provided by the user.
+
+---
+
 ## Phase 1: Read configuration
 
-Read `deploy.config.json` at the repository root and extract:
+Read `install.json` at the repository root and extract:
 
 - `REGION` = `.region.default`
 - `DEV_PROJECT_ID` = `.dev.project_id`
@@ -27,31 +81,33 @@ Read `deploy.config.json` at the repository root and extract:
 - `GITHUB_OWNER` = `.github.owner`
 - `GITHUB_REPO` = `.github.name`
 - `DEV_FRONTEND_DOMAIN` = `.domains.dev.frontend`
-- `DEV_BACKEND_DOMAIN` = `.domains.dev.backend`
 - `PROD_FRONTEND_DOMAIN` = `.domains.prod.frontend`
-- `PROD_BACKEND_DOMAIN` = `.domains.prod.backend`
 
 If the file is missing or still has placeholder values, tell the user and stop — there is nothing to uninstall.
 
 Show the extracted values and confirm before proceeding.
 
+**Log entry:** Append all extracted config values and any missing/placeholder fields found.
+
 ---
 
-## Phase 1b: Ensure on init-config branch
+## Phase 1b: Ensure on install branch
 
-The Terraform files with real project values exist only on the `init-config` branch.
+The Terraform files with real project values exist only on the `install` branch.
 
 ```bash
 git branch --show-current
 ```
 
-If not on `init-config`, switch:
+If not on `install`, switch:
 
 ```bash
-git checkout init-config
+git checkout install
 ```
 
-If `init-config` does not exist, tell the user there is nothing to uninstall (the install wizard was never completed on this machine) and stop.
+If `install` does not exist, tell the user there is nothing to uninstall (the install wizard was never completed on this machine) and stop.
+
+**Log entry:** Append which branch was active and what action was taken.
 
 ---
 
@@ -63,7 +119,7 @@ Tell the user exactly what will be deleted and ask for explicit confirmation. Do
 >
 > **Dev project (`DEV_PROJECT_ID`):**
 > - Cloud Run services: `backend-app`, `frontend-app`
-> - Cloud Run domain mappings: `DEV_FRONTEND_DOMAIN`, `DEV_BACKEND_DOMAIN`
+> - HTTPS load balancer (static IP, SSL cert, URL map, NEGs, backend services)
 > - Cloud Build triggers: `terraform-plan`, `terraform-apply`, `backend-deploy`, `frontend-deploy`
 > - Artifact Registry repository: `images` (and all Docker images inside)
 > - IAM service accounts: `terraform`, `backend-builder`, `backend-runner`, `frontend-builder`, `frontend-runner`
@@ -82,6 +138,8 @@ Tell the user exactly what will be deleted and ask for explicit confirmation. Do
 > Type **yes** to proceed, or anything else to cancel.
 
 If the user does not confirm with "yes", stop the wizard.
+
+**Log entry:** Append whether the user confirmed or cancelled.
 
 ---
 
@@ -134,6 +192,12 @@ resource "google_project_iam_member" "owner" {
     prevent_destroy = true
   }
 }
+
+resource "google_service_account_iam_member" "cloudbuild_impersonation" {
+  service_account_id = google_service_account.terraform.name
+  role               = "roles/iam.serviceAccountTokenCreator"
+  member             = "serviceAccount:${var.project.number}@cloudbuild.gserviceaccount.com"
+}
 ```
 To:
 ```hcl
@@ -146,6 +210,12 @@ resource "google_project_iam_member" "owner" {
   project = var.project.id
   role    = "roles/owner"
   member  = google_service_account.terraform.member
+}
+
+resource "google_service_account_iam_member" "cloudbuild_impersonation" {
+  service_account_id = google_service_account.terraform.name
+  role               = "roles/iam.serviceAccountTokenCreator"
+  member             = "serviceAccount:${var.project.number}@cloudbuild.gserviceaccount.com"
 }
 ```
 
@@ -177,6 +247,8 @@ Commit these changes:
 git add infra/modules/terraform/storage.tf infra/modules/terraform/iam.tf infra/dev/services.tf infra/prod/services.tf
 git commit -m "Remove lifecycle restrictions for uninstall"
 ```
+
+**Log entry:** Append the list of files edited to remove lifecycle blocks, and the git commit output.
 
 ---
 
@@ -263,6 +335,8 @@ Wait for completion. If any resource fails to destroy, note the error and contin
 
 Confirm with the user before proceeding to dev.
 
+**Log entry:** Append the full output of all prod teardown commands: Cloud Run deletions, AR repository deletion, `terraform state rm`, state migration, GCS bucket deletion, and `terraform destroy`. Note any resources that failed to delete and how they were handled.
+
 ---
 
 ## Phase 5: Teardown dev environment
@@ -326,6 +400,8 @@ cd infra/dev && terraform state rm module.terraform.google_storage_bucket.terraf
 ```bash
 cd infra/dev && terraform destroy -auto-approve
 ```
+
+**Log entry:** Append the full output of all dev teardown commands: Cloud Run deletions, AR repository deletion, `terraform state rm`, state migration, GCS bucket deletion, and `terraform destroy`. Note any resources that failed to delete and how they were handled.
 
 ---
 
@@ -408,6 +484,8 @@ After running all checks, report to the user:
 
 Tell the user that Terraform-unmanaged resources (e.g., Cloud Run services deployed by Cloud Build, or resources created manually) must be deleted via these gcloud commands; they will not be removed by `terraform destroy`.
 
+**Log entry:** Append the full output of all verification commands for both projects. List any resources that remained and required manual cleanup.
+
 ---
 
 ## Phase 7: Summary
@@ -418,17 +496,31 @@ Tell the user:
 >
 > **Remaining manual steps (if desired):**
 >
-> 1. **Remove DNS records**: Delete the CNAME records for your custom domains from your DNS provider:
+> 1. **Remove DNS records**: Delete the A records for your frontend domains from your DNS provider:
 >    - `DEV_FRONTEND_DOMAIN`
->    - `DEV_BACKEND_DOMAIN`
 >    - `PROD_FRONTEND_DOMAIN`
->    - `PROD_BACKEND_DOMAIN`
 >
 > 2. **Delete the GitHub repository**: The deployment repository at `https://github.com/GITHUB_OWNER/GITHUB_REPO` still exists. Delete it from GitHub if you no longer need it.
 >
 > 3. **Disconnect Cloud Build GitHub App** (optional): If you no longer want the Cloud Build GitHub App connected to your GitHub account, you can remove it from your GitHub account's installed apps at `https://github.com/settings/installations`.
 >
-> The `init-config` branch on this local repository still contains your deployment configuration. You can delete it with `git branch -D init-config` if you no longer need it.
+> The `install` branch on this local repository still contains your deployment configuration. You can delete it with `git branch -D install` if you no longer need it.
+
+Then ask the user:
+
+> The uninstall is complete. Before we finish, do you have any feedback on the wizard? For example:
+> - Were any steps confusing or unclear?
+> - Did any resources fail to delete unexpectedly?
+> - Are there steps you wish were automated?
+> - Any other suggestions for improvement?
+
+Append their response (verbatim) to the log under a `## User Feedback` section, then write a final `## Session End` section with the completion timestamp:
+
+```bash
+date '+%Y-%m-%d %H:%M:%S'
+```
+
+Tell the user the log has been saved to `logs/uninstall-TIMESTAMP.md` and can be shared with the webapp-template developers as feedback.
 
 ---
 

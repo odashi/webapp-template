@@ -10,20 +10,10 @@ terraform {
       source  = "hashicorp/google"
       version = ">= 6.0.0"
     }
-    google-beta = {
-      source  = "hashicorp/google-beta"
-      version = ">= 6.0.0"
-    }
   }
 }
 
 provider "google" {
-  project         = local.project.id
-  region          = local.region.default
-  request_timeout = "60s"
-}
-
-provider "google-beta" {
   project         = local.project.id
   region          = local.region.default
   request_timeout = "60s"
@@ -47,7 +37,8 @@ module "common" {
 
   depends_on = [google_project_service.common]
 
-  region = local.region
+  project = local.project
+  region  = local.region
 }
 
 module "backend" {
@@ -55,16 +46,16 @@ module "backend" {
 
   depends_on = [google_project_service.common]
 
-  prefix                = "backend"
-  service_type          = "backend"
-  branch                = local.branch
-  infra_dir             = local.infra_dir
-  project               = local.project
-  region                = local.region
-  domain                = local.domains.backend
-  github_repository     = local.github_repository
-  image_repository      = module.common.image_repository
-  enable_domain_mapping = local.enable_domain_mapping
+  prefix       = "backend"
+  service_type = "backend"
+  branch       = local.branch
+  infra_dir    = local.infra_dir
+  project      = local.project
+  region       = local.region
+
+  github_repository = local.github_repository
+  image_repository  = module.common.image_repository
+
   extra_substitutions = {
     _FRONTEND_DOMAIN = local.domains.frontend
   }
@@ -75,17 +66,30 @@ module "frontend" {
 
   depends_on = [google_project_service.common]
 
-  prefix                = "frontend"
-  service_type          = "frontend"
-  branch                = local.branch
-  infra_dir             = local.infra_dir
-  project               = local.project
-  region                = local.region
-  domain                = local.domains.frontend
-  github_repository     = local.github_repository
-  image_repository      = module.common.image_repository
-  enable_domain_mapping = local.enable_domain_mapping
+  prefix       = "frontend"
+  service_type = "frontend"
+  branch       = local.branch
+  infra_dir    = local.infra_dir
+  project      = local.project
+  region       = local.region
+
+  github_repository = local.github_repository
+  image_repository  = module.common.image_repository
+
   extra_substitutions = {
-    _VITE_API_URL = "https://${local.domains.backend}"
+    _VITE_API_URL = local.api_url
   }
+}
+
+module "lb" {
+  source = "../modules/lb"
+
+  project          = local.project
+  region           = local.region.default
+  frontend_domain  = local.domains.frontend
+  frontend_service = module.frontend.service_name
+  backend_service  = module.backend.service_name
+  enable_iap       = local.enable_iap
+  support_email    = local.iap_support_email
+  allowed_members  = local.iap_allowed_members
 }

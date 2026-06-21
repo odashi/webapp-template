@@ -27,6 +27,7 @@ resource "google_cloudbuild_trigger" "deploy" {
       )
       _RUNNER_REGION          = var.region.default
       _RUNNER_SERVICE_ACCOUNT = google_service_account.runner.email
+      _INGRESS                = "internal-and-cloud-load-balancing"
     },
     var.extra_substitutions,
   )

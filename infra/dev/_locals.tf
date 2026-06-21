@@ -8,7 +8,9 @@ locals {
     "artifactregistry.googleapis.com",
     "cloudbuild.googleapis.com",
     "cloudresourcemanager.googleapis.com",
+    "compute.googleapis.com",
     "iam.googleapis.com",
+    "iap.googleapis.com",
     "run.googleapis.com",
   ]
 
@@ -32,9 +34,16 @@ locals {
 
   domains = {
     frontend = "[[[domains.dev.frontend]]]"
-    backend  = "[[[domains.dev.backend]]]"
   }
 
-  # Set to true after Cloud Run services are deployed to enable domain mappings.
-  enable_domain_mapping = false
+  # Backend API URL: always served at /api on the frontend domain via the load balancer.
+  api_url = "https://${local.domains.frontend}/api"
+
+  # IAP — dev is protected by default; only listed members can access the environment.
+  # To open dev to the public, set enable_iap = false.
+  enable_iap          = true
+  iap_support_email   = "[[[iap.support_email]]]"
+  iap_allowed_members = [
+    # Add members here to grant access (e.g., "user:alice@example.com"):
+  ]
 }

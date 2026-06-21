@@ -1,6 +1,7 @@
 resource "google_cloudbuild_trigger" "terraform" {
   for_each = toset(["plan", "apply"])
 
+  project     = var.project.id
   name        = "terraform-${each.key}"
   description = "terraform ${each.key}"
 

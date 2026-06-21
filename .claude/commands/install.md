@@ -306,7 +306,9 @@ gcloud services enable \
   artifactregistry.googleapis.com \
   cloudbuild.googleapis.com \
   cloudresourcemanager.googleapis.com \
+  compute.googleapis.com \
   iam.googleapis.com \
+  iap.googleapis.com \
   run.googleapis.com \
   --project=DEV_PROJECT_ID
 ```
@@ -326,7 +328,9 @@ gcloud services enable \
   artifactregistry.googleapis.com \
   cloudbuild.googleapis.com \
   cloudresourcemanager.googleapis.com \
+  compute.googleapis.com \
   iam.googleapis.com \
+  iap.googleapis.com \
   run.googleapis.com \
   --project=PROD_PROJECT_ID
 ```

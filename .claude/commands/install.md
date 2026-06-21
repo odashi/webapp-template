@@ -609,7 +609,7 @@ gcloud secrets versions access latest \
 
 Confirm that output begins with the first 8 characters of the Client ID (not an error). If the command fails, check that the secret version was added correctly.
 
-#### 8-5-4. Re-apply Terraform to configure IAP with real credentials
+#### 8-6-4. Re-apply Terraform to configure IAP with real credentials
 
 Now that the credentials are stored in Secret Manager, re-run `terraform apply` so IAP is configured with the actual OAuth client (the first apply in Phase 8-2 provisioned IAP with empty credentials):
 
@@ -755,7 +755,7 @@ gcloud secrets versions access latest \
 
 Confirm that the output begins with the first 8 characters of the prod Client ID.
 
-#### 9-5-4. Re-apply Terraform to configure IAP with real credentials
+#### 9-6-4. Re-apply Terraform to configure IAP with real credentials
 
 ```bash
 CLIENT_ID=$(gcloud secrets versions access latest \

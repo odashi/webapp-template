@@ -203,14 +203,19 @@ For each approved issue, show the complete draft one final time and ask:
 >
 > Proceed? (yes / edit / skip)
 
-When the user confirms, file the issue:
+When the user confirms, file the issue by writing the body to a randomly named temporary file:
 
 ```bash
+TMPFILE=$(mktemp /tmp/gh-issue-XXXXXX.md)
+cat > "$TMPFILE" << 'EOF'
+BODY
+EOF
 gh issue create \
   --repo OWNER/REPO \
   --title "TITLE" \
-  --body "BODY" \
+  --body-file "$TMPFILE" \
   --label "LABEL"
+rm -f "$TMPFILE"
 ```
 
 If `gh issue create` fails due to the label not existing in the repository, retry without `--label` and note to the user that the label should be added manually after filing.

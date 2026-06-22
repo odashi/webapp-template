@@ -16,6 +16,14 @@ This skill is designed to be run on a recurring schedule (e.g. every 2 minutes v
 
 ---
 
+## Communication policy
+
+**Actively post comments on issue and PR pages to keep discussion moving.** Don't wait for the maintainer to ask — if a plan is clear, propose it; if something is ambiguous, ask. One short comment per turn is usually right.
+
+**Keep comments concise.** State the diagnosis, the plan, and any open question in as few sentences as possible. Avoid restating what the issue already says.
+
+---
+
 ## GitHub message rule
 
 **Always write GitHub messages (issue comments, PR comments, PR bodies) to a randomly named temporary file and pass it via `--body-file`.**

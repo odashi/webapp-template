@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 -c \"import sys,json,re; d=json.load(sys.stdin); p=d.get('file_path',''); blocked=any(re.search(pat,p) for pat in [r'\\.tfvars$',r'(^|/)\\.env$',r'credentials\\.json$',r'secret(?!.*\\.tf$)']); sys.exit(2 if blocked else 0)\""
+            "command": "python3 .claude/hooks/check_sensitive_file.py"
           }
         ]
       }

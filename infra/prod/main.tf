@@ -84,11 +84,11 @@ module "frontend" {
 module "lb" {
   source = "../modules/lb"
 
-  project          = local.project
-  region           = local.region.default
-  frontend_domain  = local.domains.frontend
-  frontend_service = module.frontend.service_name
-  backend_service  = module.backend.service_name
+  project              = local.project
+  region               = local.region.default
+  frontend_domain      = local.domains.frontend
+  frontend_service     = module.frontend.service_name
+  backend_service      = module.backend.service_name
   enable_iap           = local.enable_iap
   oauth2_client_id     = var.oauth2_client_id
   oauth2_client_secret = var.oauth2_client_secret

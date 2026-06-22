@@ -141,13 +141,14 @@ Explain to the user what this wizard will do, including all changes it makes to 
 > - Install the Cloud Build GitHub App on that repository (for both GCP projects)
 >
 > **Google Cloud changes (dev project: `DEV_PROJECT_ID`):**
-> - Enable APIs: Artifact Registry, Cloud Build, Cloud Resource Manager, Compute Engine, IAM, IAP, Cloud Run
+> - Enable APIs: Artifact Registry, Cloud Build, Cloud Resource Manager, Compute Engine, IAM, IAP, Cloud Run, Secret Manager
 > - Create a GCS bucket for Terraform state
 > - Create a Terraform service account with the necessary IAM roles
 > - Create an Artifact Registry repository for Docker images
 > - Create Cloud Build triggers (CI/CD pipelines for backend, frontend, and Terraform)
 > - Deploy backend and frontend applications to Cloud Run
 > - Create an HTTPS load balancer with SSL certificate for your custom domain
+> - Create Secret Manager secrets for IAP OAuth credentials (populated by you in Phase 8-6)
 >
 > **Google Cloud changes (prod project: `PROD_PROJECT_ID`):**
 > - Same as above for the prod project
@@ -185,7 +186,6 @@ Check each field and list any that still contain `[[[`. If any are found, tell t
 > Please edit `install.json` and replace all `[[[...]]]` placeholders with your actual values, then run the wizard again.
 
 The fields to fill in are:
-- `iap.support_email` — email shown on the OAuth consent screen (e.g. `admin@example.com`)
 - `region.default` — GCP region (e.g. `asia-northeast1`)
 - `region.storage` — GCS storage region (e.g. `ASIA-NORTHEAST1`)
 - `dev.project_id` — dev GCP project ID
@@ -201,7 +201,6 @@ Do not proceed until the file is valid. If the user says they have updated it, r
 
 Once valid, extract and store the following variables for use throughout the wizard:
 
-- `IAP_SUPPORT_EMAIL` = `.iap.support_email`
 - `REGION` = `.region.default`
 - `STORAGE_REGION` = `.region.storage`
 - `DEV_PROJECT_ID` = `.dev.project_id`
@@ -253,7 +252,6 @@ Edit `infra/dev/_locals.tf`:
 - `[[[github.owner]]]` → `GITHUB_OWNER`
 - `[[[github.name]]]` → `GITHUB_REPO`
 - `[[[domains.dev.frontend]]]` → `DEV_FRONTEND_DOMAIN`
-- `[[[iap.support_email]]]` → `IAP_SUPPORT_EMAIL`
 
 Then ask the user:
 
@@ -278,14 +276,13 @@ Edit `infra/prod/_locals.tf`:
 - `[[[github.owner]]]` → `GITHUB_OWNER`
 - `[[[github.name]]]` → `GITHUB_REPO`
 - `[[[domains.prod.frontend]]]` → `PROD_FRONTEND_DOMAIN`
-- `[[[iap.support_email]]]` → `IAP_SUPPORT_EMAIL`
 
 Edit `infra/prod/main.tf`:
 - `[[[prod.project_id]]]-terraform` → `PROD_PROJECT_ID-terraform`
 
 After all edits, show the user a brief summary of every file changed. Ask them to confirm before proceeding.
 
-**Log entry:** Append the list of files edited, the email address entered for dev IAP access, and any issues encountered during placeholder substitution.
+**Log entry:** Append the list of files edited, the email address entered for dev IAP access (`DEV_IAP_EMAIL`), and any issues encountered during placeholder substitution.
 
 ---
 

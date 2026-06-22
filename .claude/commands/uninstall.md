@@ -120,12 +120,14 @@ Tell the user exactly what will be deleted and ask for explicit confirmation. Do
 > **Dev project (`DEV_PROJECT_ID`):**
 > - Cloud Run services: `backend-app`, `frontend-app`
 > - HTTPS load balancer (static IP, SSL cert, URL map, NEGs, backend services)
+> - IAP backend service IAM bindings
+> - Secret Manager secrets: `oauth2-client-id`, `oauth2-client-secret` (if IAP was enabled)
 > - Cloud Build triggers: `terraform-plan`, `terraform-apply`, `backend-deploy`, `frontend-deploy`
 > - Artifact Registry repository: `images` (and all Docker images inside)
 > - IAM service accounts: `terraform`, `backend-builder`, `backend-runner`, `frontend-builder`, `frontend-runner`
 > - IAM role bindings for all of the above
 > - GCS bucket: `DEV_PROJECT_ID-terraform` (Terraform state)
-> - GCP APIs will be disabled: Artifact Registry, Cloud Build, Cloud Resource Manager, IAM, Cloud Run
+> - GCP APIs will be disabled: Artifact Registry, Cloud Build, Cloud Resource Manager, Compute Engine, IAM, IAP, Cloud Run, Secret Manager
 >
 > **Prod project (`PROD_PROJECT_ID`):**
 > - Same set of resources as above

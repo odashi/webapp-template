@@ -12,6 +12,7 @@ locals {
     "iam.googleapis.com",
     "iap.googleapis.com",
     "run.googleapis.com",
+    "secretmanager.googleapis.com",
   ]
 
   project = {

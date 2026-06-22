@@ -6,8 +6,9 @@ One Claude Code command deploys a full-stack web application to Google Cloud Pla
 
 - **Two isolated GCP environments** (dev and prod) with independent Cloud Run services, Cloud Build pipelines, Artifact Registry repositories, IAM, and Terraform state
 - **Automatic deployments**: push to `main` in the deployment repo → dev; push to `release` → prod
-- **Custom domains** with auto-provisioned SSL certificates via Cloud Run domain mappings
+- **Custom domains** with HTTPS load balancer and auto-provisioned Google-managed SSL certificates
 - **Infrastructure as code**: every GCP resource managed by Terraform
+- **IAP-protected environments**: dev is protected by Identity-Aware Proxy by default; access is restricted to listed members
 
 ## Stack
 
@@ -88,9 +89,6 @@ Edit `install.json` and replace every `[[[...]]]` placeholder with your actual v
 
 ```json
 {
-  "iap": {
-    "support_email": "admin@example.com"
-  },
   "region": {
     "default": "asia-northeast1",
     "storage": "ASIA-NORTHEAST1"
@@ -142,6 +140,8 @@ The wizard explains what it will do, confirms with you at each phase, and handle
 | Cloud Run service: `backend-app` | Running backend |
 | Cloud Run service: `frontend-app` | Running frontend |
 | HTTPS load balancer | Routes `/api/*` to backend, `/*` to frontend; auto-provisioned SSL |
+| IAP | Protects the environment via OAuth; dev restricts access to listed members by default |
+| Secret Manager secrets | Stores IAP OAuth client credentials |
 
 > **Note:** The wizard makes real changes to GitHub and Google Cloud. Read each confirmation prompt before proceeding.
 

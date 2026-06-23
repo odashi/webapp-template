@@ -1,8 +1,8 @@
 locals {
   # Path to shared infra modules in the repository (for Cloud Build YAML paths).
-  infra_dir = "./infra"
+  infra_dir = "infra"
   # Path to this Terraform root (passed as -chdir to Cloud Build terraform runs).
-  env_dir = "./infra/prod"
+  env_dir = "infra/prod"
 
   enabled_services = [
     "artifactregistry.googleapis.com",

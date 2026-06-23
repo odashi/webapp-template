@@ -576,8 +576,14 @@ Tell the user:
 > 2. Click **Create Credentials → OAuth client ID**
 > 3. Set **Application type** to **Web application**
 > 4. Set **Name** to `IAP` (or any name)
-> 5. Click **Create** — do **not** add any redirect URIs manually; IAP handles the redirect URI (`/_gcp_iap/callback`) automatically
-> 6. Copy the **Client ID** and **Client secret** — you will need them in the next step
+> 5. Click **Create**
+> 6. Copy the **Client ID** and **Client secret** — you will need them in the steps below
+> 7. Click **Edit** (the pencil icon) on the client you just created
+> 8. Under **Authorized redirect URIs**, click **Add URI** and enter the following, replacing `CLIENT_ID` with the Client ID from step 6:
+>    `https://iap.googleapis.com/v1/oauth/clientIds/CLIENT_ID:handleRedirect`
+> 9. Click **Save**
+>
+> This redirect URI is required for an externally-created OAuth client. Without it, IAP returns `redirect_uri_mismatch (400)` immediately after the consent screen. (`/_gcp_iap/callback` is the application-facing callback IAP handles internally; it is not the OAuth client redirect URI.)
 >
 > Note: If prompted to configure the OAuth consent screen first, set it to **Internal** type with your support email, then return to Credentials to create the client.
 
@@ -726,8 +732,14 @@ Tell the user:
 > 2. Click **Create Credentials → OAuth client ID**
 > 3. Set **Application type** to **Web application**
 > 4. Set **Name** to `IAP`
-> 5. Click **Create** — do **not** add redirect URIs manually; IAP handles `/_gcp_iap/callback` automatically
+> 5. Click **Create**
 > 6. Copy the **Client ID** and **Client secret**
+> 7. Click **Edit** (the pencil icon) on the client you just created
+> 8. Under **Authorized redirect URIs**, click **Add URI** and enter the following, replacing `CLIENT_ID` with the Client ID from step 6:
+>    `https://iap.googleapis.com/v1/oauth/clientIds/CLIENT_ID:handleRedirect`
+> 9. Click **Save**
+>
+> As in dev, this redirect URI is required for the externally-created OAuth client; without it IAP returns `redirect_uri_mismatch (400)` after the consent screen.
 
 Wait for the user to confirm they have the prod Client ID and Client secret.
 

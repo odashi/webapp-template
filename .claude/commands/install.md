@@ -149,6 +149,7 @@ Explain to the user what this wizard will do, including all changes it makes to 
 > - Deploy backend and frontend applications to Cloud Run
 > - Create an HTTPS load balancer with SSL certificate for your custom domain
 > - Create Secret Manager secrets for IAP OAuth credentials (populated by you in Phase 8-6)
+> - Provision the IAP service agent and grant it `roles/run.invoker` on the Cloud Run services (so IAP can forward authenticated traffic)
 >
 > **Google Cloud changes (prod project: `PROD_PROJECT_ID`):**
 > - Same as above for the prod project
@@ -315,6 +316,20 @@ Confirm with the user before proceeding.
 
 **Log entry:** Append the full output of the `gcloud services enable` command for dev, including any errors.
 
+### 3-3. Create the IAP service agent (skip if `enable_iap = false`)
+
+IAP forwards requests to Cloud Run through its own service agent. Terraform later grants that agent `roles/run.invoker` on the services, but the agent itself is not created by Terraform — provision it now (it requires the IAP API enabled above):
+
+```bash
+gcloud beta services identity create \
+  --service=iap.googleapis.com \
+  --project=DEV_PROJECT_ID
+```
+
+This provisions `service-DEV_PROJECT_NUMBER@gcp-sa-iap.iam.gserviceaccount.com`. Without it, IAP-authenticated requests fail with "The IAP service account is not provisioned".
+
+**Log entry:** Append the command output, including the created service agent email.
+
 ---
 
 ## Phase 4: Bootstrap prod GCP project
@@ -337,6 +352,20 @@ gcloud services enable \
 Confirm with the user before proceeding.
 
 **Log entry:** Append the full output of the `gcloud services enable` command for prod, including any errors.
+
+### 4-2. Create the IAP service agent (skip if `enable_iap = false`)
+
+Provision the prod IAP service agent (same rationale as Phase 3-3):
+
+```bash
+gcloud beta services identity create \
+  --service=iap.googleapis.com \
+  --project=PROD_PROJECT_ID
+```
+
+This provisions `service-PROD_PROJECT_NUMBER@gcp-sa-iap.iam.gserviceaccount.com`.
+
+**Log entry:** Append the command output, including the created service agent email.
 
 ---
 
@@ -492,8 +521,11 @@ cd infra/dev && terraform plan
 Show the user a summary of resources to be created (GCS bucket, Terraform SA, IAM bindings, Cloud Build triggers, Artifact Registry). Ask for confirmation, then:
 
 ```bash
-cd infra/dev && terraform apply -auto-approve
+cd infra/dev && terraform apply -auto-approve \
+  -var="grant_iap_invoker=false"
 ```
+
+`grant_iap_invoker=false` is required here: the Cloud Run services are created by Cloud Build (Phase 10), so they do not exist yet, and the IAP `roles/run.invoker` binding cannot reference a service that has not been deployed. It is re-applied with the default (true) in Phase 10-1 once the services exist.
 
 Wait for completion. Report any errors.
 
@@ -608,7 +640,7 @@ Confirm that output begins with the first 8 characters of the Client ID (not an 
 
 #### 8-6-4. Re-apply Terraform to configure IAP with real credentials
 
-Now that the credentials are stored in Secret Manager, re-run `terraform apply` so IAP is configured with the actual OAuth client (the first apply in Phase 8-2 provisioned IAP with empty credentials):
+Now that the credentials are stored in Secret Manager, re-run `terraform apply` so IAP is configured with the actual OAuth client (the first apply in Phase 8-2 provisioned IAP with empty credentials). The services still do not exist at this point, so keep `grant_iap_invoker=false`:
 
 ```bash
 CLIENT_ID=$(gcloud secrets versions access latest \
@@ -617,7 +649,8 @@ CLIENT_SECRET=$(gcloud secrets versions access latest \
   --secret=oauth2-client-secret --project=DEV_PROJECT_ID)
 cd infra/dev && terraform apply -auto-approve \
   -var="oauth2_client_id=${CLIENT_ID}" \
-  -var="oauth2_client_secret=${CLIENT_SECRET}"
+  -var="oauth2_client_secret=${CLIENT_SECRET}" \
+  -var="grant_iap_invoker=false"
 ```
 
 **Log entry:** Append whether the OAuth client was created, that the secret was stored (do NOT log the credential values), and whether the verification check and re-apply passed.
@@ -641,8 +674,11 @@ cd infra/prod && terraform plan
 Show what will be created. Ask for confirmation, then:
 
 ```bash
-cd infra/prod && terraform apply -auto-approve
+cd infra/prod && terraform apply -auto-approve \
+  -var="grant_iap_invoker=false"
 ```
+
+As in dev (Phase 8-2), `grant_iap_invoker=false` is required because the prod Cloud Run services are not deployed until Phase 13. It is re-applied with the default (true) in Phase 13-4.
 
 ### 9-3. Uncomment GCS backend and migrate state
 
@@ -754,6 +790,8 @@ Confirm that the output begins with the first 8 characters of the prod Client ID
 
 #### 9-6-4. Re-apply Terraform to configure IAP with real credentials
 
+The prod services still do not exist at this point (they deploy in Phase 13), so keep `grant_iap_invoker=false`:
+
 ```bash
 CLIENT_ID=$(gcloud secrets versions access latest \
   --secret=oauth2-client-id --project=PROD_PROJECT_ID)
@@ -761,7 +799,8 @@ CLIENT_SECRET=$(gcloud secrets versions access latest \
   --secret=oauth2-client-secret --project=PROD_PROJECT_ID)
 cd infra/prod && terraform apply -auto-approve \
   -var="oauth2_client_id=${CLIENT_ID}" \
-  -var="oauth2_client_secret=${CLIENT_SECRET}"
+  -var="oauth2_client_secret=${CLIENT_SECRET}" \
+  -var="grant_iap_invoker=false"
 ```
 
 **Log entry:** Append whether the OAuth client was created, that the secret was stored (do NOT log the credential values), and whether the verification check and re-apply passed.
@@ -801,9 +840,25 @@ Tell the user:
 
 Wait for the user to confirm both dev builds succeed before proceeding.
 
+### 10-1. Grant the IAP service agent access to the deployed services (skip if `enable_iap = false`)
+
+`backend-app` and `frontend-app` now exist, so re-apply Terraform with `grant_iap_invoker` at its default (true) to grant the IAP service agent `roles/run.invoker` on each service. Pass the OAuth credentials again so the IAP configuration from Phase 8-6-4 is preserved:
+
+```bash
+CLIENT_ID=$(gcloud secrets versions access latest \
+  --secret=oauth2-client-id --project=DEV_PROJECT_ID)
+CLIENT_SECRET=$(gcloud secrets versions access latest \
+  --secret=oauth2-client-secret --project=DEV_PROJECT_ID)
+cd infra/dev && terraform apply -auto-approve \
+  -var="oauth2_client_id=${CLIENT_ID}" \
+  -var="oauth2_client_secret=${CLIENT_SECRET}"
+```
+
+Without this grant, authenticated requests fail with "The IAP service account is not provisioned". Subsequent Cloud Build `terraform-apply` runs keep the binding in place because `grant_iap_invoker` defaults to true.
+
 Note: Going forward, pushes to `main` that include changes under `backend/**/*` or `frontend/**/*` will auto-trigger the respective service build. Pushes that only change Terraform files (`infra/**/*`) will trigger only the `terraform-apply` trigger.
 
-**Log entry:** Append the trigger list output, which triggers were run (manual or auto), and the time taken for dev builds to complete. Note whether the user had to run triggers manually or they fired automatically.
+**Log entry:** Append the trigger list output, which triggers were run (manual or auto), the time taken for dev builds to complete, and whether the IAP invoker re-apply (Phase 10-1) succeeded. Note whether the user had to run triggers manually or they fired automatically.
 
 ---
 
@@ -890,7 +945,23 @@ Once both prod builds succeed, tell the user:
 
 Wait for the user to confirm both prod builds succeed.
 
-**Log entry:** Append the trigger list output, whether builds fired automatically or required manual runs, and the time taken.
+### 13-4. Grant the IAP service agent access to the deployed services (skip if `enable_iap = false`)
+
+The prod `backend-app` and `frontend-app` now exist, so re-apply Terraform with `grant_iap_invoker` at its default (true), passing the OAuth credentials so the IAP configuration from Phase 9-6-4 is preserved:
+
+```bash
+CLIENT_ID=$(gcloud secrets versions access latest \
+  --secret=oauth2-client-id --project=PROD_PROJECT_ID)
+CLIENT_SECRET=$(gcloud secrets versions access latest \
+  --secret=oauth2-client-secret --project=PROD_PROJECT_ID)
+cd infra/prod && terraform apply -auto-approve \
+  -var="oauth2_client_id=${CLIENT_ID}" \
+  -var="oauth2_client_secret=${CLIENT_SECRET}"
+```
+
+Without this grant, authenticated prod requests fail with "The IAP service account is not provisioned". Subsequent Cloud Build `terraform-apply` runs keep the binding in place because `grant_iap_invoker` defaults to true.
+
+**Log entry:** Append the trigger list output, whether builds fired automatically or required manual runs, the time taken, and whether the IAP invoker re-apply (Phase 13-4) succeeded.
 
 ---
 

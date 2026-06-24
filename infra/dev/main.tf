@@ -90,6 +90,7 @@ module "lb" {
   frontend_service     = module.frontend.service_name
   backend_service      = module.backend.service_name
   enable_iap           = local.enable_iap
+  grant_iap_invoker    = var.grant_iap_invoker
   oauth2_client_id     = var.oauth2_client_id
   oauth2_client_secret = var.oauth2_client_secret
   allowed_members      = local.iap_allowed_members
